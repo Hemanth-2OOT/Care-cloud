@@ -35,7 +35,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'login'  # type: ignore
 
 # --- Models ---
 class User(UserMixin, db.Model):
@@ -76,7 +76,7 @@ def signup():
             flash('Email already exists')
             return redirect(url_for('signup'))
 
-        new_user = User(name=name, email=email, parent_email=parent_email)
+        new_user = User(name=name, email=email, parent_email=parent_email)  # type: ignore
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
@@ -207,7 +207,7 @@ def analyze():
         ocr_text = ''
         if image_file:
             try:
-                img = PIL.Image.open(image_file)
+                img = PIL.Image.open(image_file.stream)  # type: ignore
                 # Optional: convert to RGB for some images
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
