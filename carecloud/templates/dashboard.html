@@ -9,31 +9,66 @@
 </div>
 
 <div class="dashboard-grid">
-    <!-- Input Section -->
-    <div class="card input-section">
-        <h2>Check Content</h2>
-        <form id="analyzeForm">
-            <div class="form-group">
-                <label for="text_content">Paste text message or comment</label>
-                <textarea id="text_content" name="text" rows="6" placeholder="Type something here..."></textarea>
-            </div>
+    <!-- Left: Input & Tips Section -->
+    <div>
+        <!-- Input Section -->
+        <div class="card input-section">
+            <h2>Check Content</h2>
+            <form id="analyzeForm">
+                <div class="form-group">
+                    <label for="text_content">Paste text message or comment</label>
+                    <textarea id="text_content" name="text" rows="5" placeholder="Type something here..."></textarea>
+                </div>
 
-            <div class="form-group">
-                <label for="image_file">Or upload a screenshot (optional)</label>
-                <input type="file" id="image_file" name="image" accept="image/*">
-            </div>
+                <div class="form-group">
+                    <label for="image_file">Or upload a screenshot (optional)</label>
+                    <input type="file" id="image_file" name="image" accept="image/*">
+                </div>
 
-            <button type="submit" class="btn-primary" id="analyzeBtn">Analyze Content</button>
-        </form>
+                <button type="submit" class="btn-primary" id="analyzeBtn">Analyze Content</button>
+            </form>
+        </div>
+
+        <!-- Tips & Affirmations Section (Always Visible) -->
+        <div class="card tips-section">
+            <h2>💡 Positive Tips for You</h2>
+            <div class="tips-grid">
+                <div class="tip-card">
+                    <span class="tip-emoji">💪</span>
+                    <p>You are not alone. Many people go through similar experiences.</p>
+                </div>
+                <div class="tip-card">
+                    <span class="tip-emoji">🤝</span>
+                    <p>It's okay to ask for help. Talking to someone you trust makes a difference.</p>
+                </div>
+                <div class="tip-card">
+                    <span class="tip-emoji">✨</span>
+                    <p>Mean messages do not define your worth. You are valued!</p>
+                </div>
+                <div class="tip-card">
+                    <span class="tip-emoji">🔒</span>
+                    <p>You have the power to block, mute, and report harmful content.</p>
+                </div>
+                <div class="tip-card">
+                    <span class="tip-emoji">🌟</span>
+                    <p>Focus on positive people and communities that make you feel good.</p>
+                </div>
+                <div class="tip-card">
+                    <span class="tip-emoji">📱</span>
+                    <p>Take breaks from social media. Your mental health matters most.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Results Section -->
-    <div class="card">
+    <!-- Right: Analysis Results Section -->
+    <div class="card results-card">
         <h2>Analysis Results</h2>
 
         <div id="loading" class="loading-spinner">
             <div class="spinner"></div>
-            <p>Analyzing with Gemini AI...</p>
+            <p>Analyzing with AI...</p>
+            <small>Protecting, not punishing</small>
         </div>
 
         <div id="initialState">
@@ -41,6 +76,7 @@
         </div>
 
         <div id="results" class="results-section">
+            <!-- Score Circle -->
             <div class="score-display" id="scoreContainer">
                 <div class="score-circle">
                     <span class="score-value" id="scoreValue">0</span>
@@ -48,18 +84,38 @@
                 </div>
             </div>
 
+            <!-- Severity Meter -->
+            <div class="severity-meter">
+                <div class="meter-bar" id="severityMeter"></div>
+            </div>
+
+            <!-- Detection Labels -->
+            <div class="labels-section">
+                <h3>What We Detected</h3>
+                <div id="labelsContainer" class="labels-grid"></div>
+            </div>
+
+            <!-- Analysis Explanation -->
             <div class="result-card explanation">
-                <h3>Analysis</h3>
+                <h3>📋 Analysis</h3>
                 <p id="explanationText">No harmful content detected.</p>
             </div>
 
-            <div class="result-card support-message" id="supportMessageContainer">
-                <h3>Support Message</h3>
+            <!-- Support Message -->
+            <div class="result-card support-message">
+                <h3>💚 Message for You</h3>
                 <p id="supportMessageText">You're doing great! Keep spreading positivity.</p>
             </div>
 
-            <div id="alertInfo" style="display: none; margin-top: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
-                <p>ℹ️ A report has been sent to your parent/guardian for support.</p>
+            <!-- Recommended Action -->
+            <div class="result-card recommendation">
+                <h3>💡 Recommended Action</h3>
+                <p id="recommendedActionText">Continue being kind online!</p>
+            </div>
+
+            <!-- Parent Alert Info -->
+            <div id="alertInfo" class="alert-info">
+                <span>ℹ️ A detailed report has been sent to your parent/guardian</span>
             </div>
         </div>
     </div>

@@ -113,33 +113,69 @@ def logout():
 def dashboard():
     return render_template('dashboard.html', user=current_user)
 
-def send_email_alert(parent_email, student_name, score, severity):
+def send_email_alert(parent_email, student_name, score, severity, labels=None):
+    """Send detailed email alert to parent with comprehensive analysis labels."""
     sender_email = os.getenv('MAIL_USERNAME')
     sender_password = os.getenv('MAIL_PASSWORD')
 
     if not sender_email or not sender_password:
-        print("Email credentials not set. Skipping email alert.")
+        print("⚠️ Email credentials not configured. Alert saved but email not sent.")
+        print(f"   To enable: Set MAIL_USERNAME and MAIL_PASSWORD environment variables")
         return False
 
-    msg = MIMEMultipart()
+    # Prepare labels for email
+    detected_issues = []
+    if labels:
+        if labels.get('harassment'): detected_issues.append('🚨 Harassment/Bullying')
+        if labels.get('hate_speech'): detected_issues.append('⚠️ Hate Speech')
+        if labels.get('threats'): detected_issues.append('🔴 Threats')
+        if labels.get('sexual_content'): detected_issues.append('🔒 Inappropriate Content')
+        if labels.get('emotional_abuse'): detected_issues.append('💔 Emotional Abuse')
+        if labels.get('cyberbullying'): detected_issues.append('📱 Cyberbullying')
+
+    issues_text = '\n'.join([f"  {issue}" for issue in detected_issues]) if detected_issues else "  Toxicity detected"
+
+    msg = MIMEMultipart('alternative')
     msg['From'] = sender_email
     msg['To'] = parent_email
-    msg['Subject'] = f"CareCloud Alert: Emotional Support Needed for {student_name}"
+    msg['Subject'] = f"🚨 CareCloud Alert – Support Needed for {student_name}"
 
+    # HTML email with proper formatting (no raw content)
     body = f"""
-    Dear Parent/Guardian,
+Dear Parent/Guardian,
 
-    CareCloud has detected content associated with {student_name}'s account that may be emotionally harmful.
+We're reaching out because CareCloud detected potentially harmful content exposure on {student_name}'s account.
 
-    Analysis Summary:
-    - Toxicity Score: {score}/100
-    - Severity Level: {severity}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 ANALYSIS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    We encourage you to have a supportive, non-judgmental conversation with {student_name}.
-    Please approach this with empathy and care. The goal is emotional safety, not punishment.
+Detected Issues:
+{issues_text}
 
-    Best regards,
-    The CareCloud Team
+Severity Level: {severity} ({score}/100)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 HOW YOU CAN HELP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Have a calm, supportive conversation
+✓ Listen without judgment
+✓ Reassure them it's not their fault
+✓ Consider professional counseling if needed
+✓ Monitor their online activity going forward
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 IMPORTANT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CareCloud uses AI to PROTECT, not punish.
+We never share raw messages - only analysis labels.
+Your child is safe, and we're here to help.
+
+Best regards,
+The CareCloud Team
+Support: carecloud@example.com
     """
     msg.attach(MIMEText(body, 'plain'))
 
@@ -150,10 +186,10 @@ def send_email_alert(parent_email, student_name, score, severity):
         text = msg.as_string()
         server.sendmail(sender_email, parent_email, text)
         server.quit()
-        print(f"Email sent to {parent_email}")
+        print(f"✅ Email alert sent to {parent_email}")
         return True
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print(f"❌ Failed to send email: {e}")
         return False
 
 @app.route('/analyze', methods=['POST'])
@@ -182,15 +218,26 @@ def analyze():
                 ocr_text = ''
 
         prompt_text = """
-        Analyze the following content (text and/or OCR-extracted text from an image) for cyberbullying, toxicity, harassment, hate speech, and threats.
-        Provide a JSON object with the fields:
-          - toxicity_score: integer (0-100)
-          - severity_level: string ("Low", "Medium", "High", "Critical")
-          - explanation: string (brief explanation of why it was flagged or not)
-          - victim_support_message: string (empathetic, supportive message for the user)
-          - parent_alert_required: boolean (true if toxicity_score > 70)
-
-        Return only the raw JSON (no markdown code fences).
+        Analyze the following content for harmful patterns. Return ONLY valid JSON (no markdown).
+        
+        JSON fields:
+        - toxicity_score: 0-100
+        - severity_level: "Low", "Medium", "High", or "Critical"
+        - explanation: brief reason for rating
+        - victim_support_message: empathetic message for the child
+        - parent_alert_required: true if score > 70
+        - detected_labels: object with boolean values for: harassment, hate_speech, threats, sexual_content, emotional_abuse, cyberbullying
+        - recommended_action: string (e.g. "supportive conversation", "monitoring", "counseling")
+        
+        Example labels detection:
+        {
+          "harassment": true,
+          "hate_speech": false,
+          "threats": false,
+          "sexual_content": false,
+          "emotional_abuse": true,
+          "cyberbullying": true
+        }
         """
 
         # Build content for Gemini
@@ -215,13 +262,18 @@ def analyze():
 
         analysis_result = json.loads(response_text)
 
-        # Trigger email alert if needed
+        # Ensure labels exist in response
+        if 'detected_labels' not in analysis_result:
+            analysis_result['detected_labels'] = {}
+
+        # Trigger email alert if needed (critical severity)
         if analysis_result.get('parent_alert_required', False):
             send_email_alert(
                 current_user.parent_email,
                 current_user.name,
                 analysis_result.get('toxicity_score', 0),
-                analysis_result.get('severity_level', 'Unknown')
+                analysis_result.get('severity_level', 'Unknown'),
+                analysis_result.get('detected_labels', {})
             )
 
         return jsonify(analysis_result)
