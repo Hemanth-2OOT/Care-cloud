@@ -1,0 +1,114 @@
+I am building an AI-powered cyberbullying prevention app called **CareCloud** (Child–Parent safety system).
+There are a few critical issues and UI gaps that must be fixed and improved to make the prototype judge-ready.
+
+Please do the following fixes and enhancements carefully:
+
+-----------------------------------
+1️⃣ FIX EMAIL ALERT SYSTEM (CRITICAL)
+-----------------------------------
+Problem:
+- Alert emails are NOT being sent to the parent email.
+- Parent is not receiving any report even when high toxicity is detected.
+
+Fix:
+- Ensure the email is actually sent using a working email service (Gmail API / SendGrid / Nodemailer).
+- Email must be sent to the **parent_email linked to the child account**.
+- Trigger email ONLY when toxicity severity crosses a defined threshold.
+
+Email content MUST include:
+- Child name / ID (do NOT include raw abusive content)
+- Clear LABELS of exposure (e.g. Harassment, Hate Speech, Threats, Sexual Content, Self-Harm)
+- Short explanation of WHY help is required
+- Severity level (Low / Medium / High)
+- Recommended parent action (support, conversation, monitoring, counseling)
+
+Example email structure:
+Subject: 🚨 CareCloud Alert – Attention Required
+
+Body:
+- Detected Issue Labels
+- Severity Level
+- Why this is concerning
+- How parents can help
+- Reassuring, calm, non-panic tone
+
+-----------------------------------
+2️⃣ ADD CLEAR LABELS TO ANALYSIS RESULT
+-----------------------------------
+Problem:
+- Analysis results are unclear and lack labeled explanation.
+
+Fix:
+- Add visible labeled chips/tags under the analysis result:
+  - Toxicity
+  - Harassment
+  - Hate Speech
+  - Threats
+  - Sexual Content
+  - Emotional Abuse
+- Each label should show:
+  - Detected / Not Detected
+  - Color coded (green, yellow, red)
+
+-----------------------------------
+3️⃣ FIX EMPTY SPACE BELOW "CHECK CONTENT"
+-----------------------------------
+Problem:
+- There is empty unused space under the "Check Content" section.
+
+Fix:
+Fill this space with meaningful content such as:
+- Positive coping tips for the child
+- Affirmation messages
+- Educational tips like:
+  “You are not alone.”
+  “It’s okay to ask for help.”
+  “Mean messages do not define your worth.”
+
+This section should ALWAYS be visible.
+
+-----------------------------------
+4️⃣ CHILD DASHBOARD UX IMPROVEMENTS
+-----------------------------------
+- Keep the UI soft, pastel, and kid-friendly.
+- Use rounded cards, friendly fonts, emojis where appropriate.
+- Ensure "Quick Tips / Positive Suggestions" NEVER disappear after analysis.
+- Results should appear beside or below tips, not replace them.
+
+-----------------------------------
+5️⃣ PARENT DASHBOARD IMPROVEMENTS
+-----------------------------------
+- Show alert history with:
+  - Date
+  - Labels
+  - Severity
+- NO raw abusive text (privacy protection).
+- Add a “How to Respond” guidance section for parents.
+
+-----------------------------------
+6️⃣ MAKE PROTOTYPE JUDGE-IMPRESSIVE
+-----------------------------------
+Add these enhancements:
+- Severity meter (progress bar or emoji scale)
+- Friendly loading animation while AI analyzes
+- Clear explanation: “AI is used to protect, not punish”
+- Accessibility: large buttons, readable text
+- Add a short “Why CareCloud?” section
+
+-----------------------------------
+7️⃣ CODE QUALITY
+-----------------------------------
+- Clean, commented, readable code
+- Separate UI, logic, and services
+- Ensure everything runs correctly on Replit
+- Use ONLY free or free-tier services
+
+-----------------------------------
+Final Output Required:
+- Fixed working email alert system
+- Improved UI with labels and filled sections
+- Clear comments explaining changes
+- Ready-to-demo prototype
+
+This project is intended for judges evaluating social impact, AI responsibility, and user safety.
+Please prioritize clarity, emotional safety, and polish.
