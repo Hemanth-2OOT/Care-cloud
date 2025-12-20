@@ -14,18 +14,10 @@ import pytesseract
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini AI using Replit integration (no API key needed)
-from google import genai
-from google.genai import types
+# Configure Gemini AI using Replit integration
+import google.generativeai as genai
 
-# This uses Replit's AI Integrations service automatically
-client = genai.Client(
-    api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY", ""),
-    http_options={
-        'api_version': '',
-        'base_url': os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL", "")   
-    }
-)
+genai.configure(api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY", ""))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this-in-prod')
@@ -260,10 +252,8 @@ def analyze():
             content.append(f"OCR Extracted Text: {ocr_text}")
 
         # Call Gemini AI via Replit integration
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=' '.join(content)
-        )
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(' '.join(content))
         response_text = response.text.strip() if response.text else ""
 
         # Try to extract JSON substring in case the model added commentary
