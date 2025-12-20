@@ -218,31 +218,37 @@ def analyze():
                 ocr_text = ''
 
         prompt_text = """
-        Analyze the following content for harmful patterns. Return ONLY valid JSON (no markdown).
+        You are CareCloud Safety Agent. Analyze content for harmful patterns. Return ONLY valid JSON (no markdown, no extra text).
         
-        JSON fields:
-        - toxicity_score: 0-100
-        - severity_level: "Low", "Medium", "High", or "Critical"
-        - explanation: Clear explanation of WHY this content is harmful (specific issues detected)
-        - victim_support_message: Empathetic, reassuring message for the child (if they are the victim)
-        - suggested_safe_responses: 2-3 example safe responses the user could use instead
-        - parent_alert_required: true if score > 70
-        - detected_labels: object with boolean values for: harassment, hate_speech, threats, sexual_content, emotional_abuse, cyberbullying
-        - recommended_action: string (action to take, e.g. "block user", "report to platform", "talk to trusted adult")
+        CRITICAL: Always include ALL these sections. Never omit any:
+        - toxicity_score: 0-100 integer
+        - severity_level: "Low" (0-30), "Medium" (31-60), "High" (61-85), or "Critical" (86-100)
+        - explanation: Clear explanation of WHY this content is harmful. Simple language. If safe, explain it's appropriate.
+        - victim_support_message: Empathetic reassurance if harmful. Always provide guidance & emotional safety. If safe, provide encouragement.
+        - safe_response_steps: Array of 3 step-by-step instructions on how to respond safely. If safe, provide tips for similar situations.
+        - detected_labels: Object with BOOLEAN values (true/false) for: harassment, hate_speech, threats, sexual_content, emotional_abuse, cyberbullying
+        - parent_alert_required: true if toxicity_score > 70, false otherwise
         
-        Example:
+        Example (High Risk):
         {
           "toxicity_score": 85,
           "severity_level": "Critical",
-          "explanation": "This message contains severe harassment and threats. It uses dehumanizing language and contains explicit threats of violence.",
-          "victim_support_message": "This is not okay. You don't deserve to be treated this way. Please talk to a trusted adult about what happened.",
-          "suggested_safe_responses": ["I'm reporting this.", "I don't engage with this behavior.", "This is unacceptable and I'm blocking you."],
-          "harassment": true,
-          "hate_speech": true,
-          "threats": true,
-          "sexual_content": false,
-          "emotional_abuse": true,
-          "cyberbullying": true
+          "explanation": "This contains severe harassment with dehumanizing language and threats of violence directed at the recipient.",
+          "victim_support_message": "This is not okay. You don't deserve to be treated this way. Please talk to a trusted adult about what happened. You are not alone.",
+          "safe_response_steps": ["Step 1: Block this person immediately.", "Step 2: Take a screenshot for evidence.", "Step 3: Tell a trusted adult or report to the platform."],
+          "detected_labels": {"harassment": true, "hate_speech": true, "threats": true, "sexual_content": false, "emotional_abuse": true, "cyberbullying": true},
+          "parent_alert_required": true
+        }
+        
+        Example (Safe):
+        {
+          "toxicity_score": 15,
+          "severity_level": "Low",
+          "explanation": "This is appropriate communication. It shows respect and clear boundaries.",
+          "victim_support_message": "Great job communicating clearly and respectfully. Keep setting healthy boundaries in your interactions.",
+          "safe_response_steps": ["Step 1: Continue using respectful language.", "Step 2: Listen to others' perspectives.", "Step 3: Ask clarifying questions if confused."],
+          "detected_labels": {"harassment": false, "hate_speech": false, "threats": false, "sexual_content": false, "emotional_abuse": false, "cyberbullying": false},
+          "parent_alert_required": false
         }
         """
 

@@ -115,18 +115,22 @@ function updateUI(data) {
     // Render detection labels
     renderLabels(data.detected_labels || {});
 
-    // Update victim support section
+    // Update victim support section (ALWAYS show)
     const victimSection = document.getElementById('victimSupportSection');
-    if (data.victim_support_message && isRisk) {
+    if (data.victim_support_message) {
         document.getElementById('victimSupportText').textContent = data.victim_support_message;
         victimSection.style.display = 'block';
     } else {
         victimSection.style.display = 'none';
     }
 
-    // Update safe responses section
+    // Update safe response steps section (ALWAYS show)
     const responsesSection = document.getElementById('safeResponsesSection');
-    if (data.suggested_safe_responses && Array.isArray(data.suggested_safe_responses)) {
+    if (data.safe_response_steps && Array.isArray(data.safe_response_steps)) {
+        renderSafeResponses(data.safe_response_steps);
+        responsesSection.style.display = 'block';
+    } else if (data.suggested_safe_responses && Array.isArray(data.suggested_safe_responses)) {
+        // Fallback for old format
         renderSafeResponses(data.suggested_safe_responses);
         responsesSection.style.display = 'block';
     } else {
