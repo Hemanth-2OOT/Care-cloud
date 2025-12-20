@@ -1,0 +1,67 @@
+I need you to fix and enhance the current CareCloud prototype with the following requirements:
+
+1. **404 Hosting Issue**
+   - The GitHub Pages version is showing “404 Not Found”.
+   - Instead of GitHub Pages, host the frontend on Replit with a proper static or Node.js server that serves `index.html`, `dashboard_child.html`, and `dashboard_parent.html` correctly.
+   - Ensure all routes and assets load correctly (no 404s).
+
+2. **Email Alert System**
+   - The current email alert for parents is not working.
+   - Implement a working email alert system:
+     - Use a free email provider like **SendGrid** (preferred) or **Gmail API**.
+     - When a child’s message is flagged for toxicity, automatically email the parent.
+     - The email should include:
+       - **Report title**
+       - **Label(s) detected** (toxicity, hate, threats, etc.)
+       - **Reason why the alert was triggered**
+       - **Supportive recommendations**
+   - The backend (Node.js/Express) or Replit server should securely store API keys (e.g., in `.env`) and send the email via SendGrid.
+
+3. **Labels with Analysis Result**
+   - After a message is analyzed by Gemini AI (flash model), display:
+     - **Toxicity score**
+     - **Detected categories (labels)** like “Hate Speech”, “Insult”, “Threat”
+     - A clear explanation of what those labels mean
+     - Approachable supportive language on the UI
+
+4. **Fill Empty Space on UI**
+   - The “Check Content” area currently has a blank space.
+   - Add appropriate supportive text such as:
+     - **Positive Suggestions**
+     - **Helpful Tips for Emotional Well-Being**
+     - **Encouraging statements about online safety**
+
+5. **Parent and Child Dashboards**
+   - Child dashboard:
+     - Soft/pastel UI for kids
+     - Pleasant fonts and icons
+     - Show analysis history and positive suggestions
+   - Parent dashboard:
+     - Show a list of alerts
+     - Each alert should show:
+       - Date/time
+       - Child account name
+       - Labels detected
+       - Brief explanation
+       - Link to full report
+     - Provide high-level guidance for parents (e.g., how to talk to their child, online safety tips)
+
+6. **Judges-Friendly Enhancements**
+   - Add a **report export/download option** (PDF or email summary)
+   - Add **search/filter** for parents to filter alerts by label or date
+   - Add a **“Learn More” section** with tips on cyberbullying, prevention strategies, and emotional support resources
+   - Add animation or subtle transitions for better UX
+
+7. **Replit Setup**
+   - Ensure a working `server.js` or Express backend for endpoints:
+     - `/analyze`
+     - `/sendAlert`
+     - `/login`
+     - `/dashboard_child`
+     - `/dashboard_parent`
+   - Properly load static files
+   - Use `.env` for sensitive keys
+
+Output the **full updated code** — including `server.js`, HTML files, CSS, frontend JS, SendGrid integration, and deployment instructions — so that the prototype works end-to-end.
+
+Bonus: include a `README.md` with setup and judge demo steps.
