@@ -3,119 +3,121 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="dashboard-header">
-    <h1>Hello, {{ user.name }} 👋</h1>
-    <p>Let's make sure your content is safe and kind.</p>
-</div>
-
-<div class="dashboard-grid">
-    <!-- Left: Input & Tips Section -->
-    <div>
-        <!-- Input Section -->
-        <div class="card input-section">
-            <h2>Check Content</h2>
-            <form id="analyzeForm">
-                <div class="form-group">
-                    <label for="text_content">Paste text message or comment</label>
-                    <textarea id="text_content" name="text" rows="5" placeholder="Type something here..."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="image_file">Or upload a screenshot (optional)</label>
-                    <input type="file" id="image_file" name="image" accept="image/*">
-                </div>
-
-                <button type="submit" class="btn-primary" id="analyzeBtn">Analyze Content</button>
-            </form>
-        </div>
-
-        <!-- Tips & Affirmations Section (Always Visible) -->
-        <div class="card tips-section">
-            <h2>💡 Positive Tips for You</h2>
-            <div class="tips-grid">
-                <div class="tip-card">
-                    <span class="tip-emoji">💪</span>
-                    <p>You are not alone. Many people go through similar experiences.</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-emoji">🤝</span>
-                    <p>It's okay to ask for help. Talking to someone you trust makes a difference.</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-emoji">✨</span>
-                    <p>Mean messages do not define your worth. You are valued!</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-emoji">🔒</span>
-                    <p>You have the power to block, mute, and report harmful content.</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-emoji">🌟</span>
-                    <p>Focus on positive people and communities that make you feel good.</p>
-                </div>
-                <div class="tip-card">
-                    <span class="tip-emoji">📱</span>
-                    <p>Take breaks from social media. Your mental health matters most.</p>
-                </div>
+<div class="agent-container">
+    <!-- Agent Status Header -->
+    <div class="agent-status-header">
+        <div class="status-left">
+            <div class="agent-indicator active"></div>
+            <div class="status-text">
+                <h1>CareCloud Agent</h1>
+                <p class="status-label">Agent Active</p>
             </div>
+        </div>
+        <div class="user-info">
+            <span class="user-name">{{ user.name }}</span>
         </div>
     </div>
 
-    <!-- Right: Analysis Results Section -->
-    <div class="card results-card">
-        <h2>Analysis Results</h2>
+    <div class="dashboard-layout">
+        <!-- Main Action Card -->
+        <div class="action-card">
+            <div class="card-header">
+                <h2>Analyze Content</h2>
+                <p class="card-subtitle">Submit text or image for safety analysis</p>
+            </div>
 
-        <div id="loading" class="loading-spinner">
-            <div class="spinner"></div>
-            <p>Analyzing with AI...</p>
-            <small>Protecting, not punishing</small>
+            <form id="analyzeForm" class="analyze-form">
+                <div class="form-field">
+                    <label for="text_content">Text or Message</label>
+                    <textarea 
+                        id="text_content" 
+                        name="text" 
+                        rows="6" 
+                        placeholder="Paste text, comment, or message to analyze..."
+                        class="input-textarea"
+                    ></textarea>
+                </div>
+
+                <div class="form-field">
+                    <label for="image_file">Screenshot (Optional)</label>
+                    <input 
+                        type="file" 
+                        id="image_file" 
+                        name="image" 
+                        accept="image/*"
+                        class="input-file"
+                    >
+                </div>
+
+                <button type="submit" class="btn-analyze" id="analyzeBtn">Analyze Now</button>
+            </form>
+
+            <!-- Analysis State Display -->
+            <div id="stateContainer" class="state-display">
+                <div id="idleState" class="state idle-state">
+                    <p>Ready to analyze. Submit content above.</p>
+                </div>
+
+                <div id="analyzingState" class="state analyzing-state" style="display: none;">
+                    <div class="agent-spinner"></div>
+                    <p>Analyzing content...</p>
+                </div>
+
+                <div id="safeState" class="state safe-state" style="display: none;">
+                    <div class="state-icon">✓</div>
+                    <p>Content assessed as safe</p>
+                </div>
+
+                <div id="riskState" class="state risk-state" style="display: none;">
+                    <div class="state-icon">!</div>
+                    <p>Potential risk detected</p>
+                </div>
+            </div>
         </div>
 
-        <div id="initialState">
-            <p class="text-secondary">Submit content to see the analysis here.</p>
-        </div>
+        <!-- Analysis Results Panel -->
+        <div class="results-panel">
+            <div id="resultsEmpty" class="results-empty">
+                <p>Analysis results will appear here</p>
+            </div>
 
-        <div id="results" class="results-section">
-            <!-- Score Circle -->
-            <div class="score-display" id="scoreContainer">
-                <div class="score-circle">
-                    <span class="score-value" id="scoreValue">0</span>
-                    <span class="score-label" id="severityLabel">Safe</span>
+            <div id="resultsContent" class="results-content" style="display: none;">
+                <!-- Risk Score -->
+                <div class="risk-section">
+                    <div class="risk-meter">
+                        <div class="risk-bar" id="riskBar"></div>
+                    </div>
+                    <div class="risk-labels">
+                        <span class="risk-value" id="riskScore">0</span>
+                        <span class="risk-status" id="riskStatus">Safe</span>
+                    </div>
+                </div>
+
+                <!-- Detection Labels -->
+                <div class="detections-section">
+                    <h3>Detections</h3>
+                    <div id="labelsContainer" class="labels-minimal"></div>
+                </div>
+
+                <!-- Analysis Summary -->
+                <div class="analysis-summary">
+                    <h3>Analysis</h3>
+                    <p id="explanationText"></p>
+                </div>
+
+                <!-- Parent Alert -->
+                <div id="alertInfo" class="alert-notification" style="display: none;">
+                    <span class="alert-icon">⚠</span>
+                    <span class="alert-text">Parent notified</span>
                 </div>
             </div>
 
-            <!-- Severity Meter -->
-            <div class="severity-meter">
-                <div class="meter-bar" id="severityMeter"></div>
-            </div>
-
-            <!-- Detection Labels -->
-            <div class="labels-section">
-                <h3>What We Detected</h3>
-                <div id="labelsContainer" class="labels-grid"></div>
-            </div>
-
-            <!-- Analysis Explanation -->
-            <div class="result-card explanation">
-                <h3>📋 Analysis</h3>
-                <p id="explanationText">No harmful content detected.</p>
-            </div>
-
-            <!-- Support Message -->
-            <div class="result-card support-message">
-                <h3>💚 Message for You</h3>
-                <p id="supportMessageText">You're doing great! Keep spreading positivity.</p>
-            </div>
-
-            <!-- Recommended Action -->
-            <div class="result-card recommendation">
-                <h3>💡 Recommended Action</h3>
-                <p id="recommendedActionText">Continue being kind online!</p>
-            </div>
-
-            <!-- Parent Alert Info -->
-            <div id="alertInfo" class="alert-info">
-                <span>ℹ️ A detailed report has been sent to your parent/guardian</span>
+            <!-- Recent Agent Insights -->
+            <div class="agent-insights">
+                <h4>Recent Insights</h4>
+                <div id="insightsPanel" class="insights-list">
+                    <p class="text-muted">No recent analysis</p>
+                </div>
             </div>
         </div>
     </div>

@@ -1,3 +1,6 @@
+// Global state for analysis history
+const analysisHistory = [];
+
 // Form submission handler
 document.getElementById('analyzeForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -10,16 +13,8 @@ document.getElementById('analyzeForm').addEventListener('submit', async function
         return;
     }
 
-    // UI State: Loading
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    const loading = document.getElementById('loading');
-    const results = document.getElementById('results');
-    const initialState = document.getElementById('initialState');
-
-    analyzeBtn.disabled = true;
-    initialState.style.display = 'none';
-    results.classList.remove('active');
-    loading.classList.add('active');
+    // Show analyzing state
+    showAnalyzingState();
 
     try {
         const formData = new FormData();
@@ -37,104 +32,165 @@ document.getElementById('analyzeForm').addEventListener('submit', async function
 
         if (response.ok) {
             updateUI(data);
+            addToHistory(textContent, data);
         } else {
             alert('Error: ' + (data.error || 'Something went wrong'));
+            showIdleState();
         }
 
     } catch (error) {
         console.error('Error:', error);
         alert('Failed to connect to the server.');
-    } finally {
-        analyzeBtn.disabled = false;
-        loading.classList.remove('active');
-        results.classList.add('active');
+        showIdleState();
     }
 });
 
-// Update UI with analysis results
+// Show analyzing state
+function showAnalyzingState() {
+    document.getElementById('idleState').style.display = 'none';
+    document.getElementById('analyzingState').style.display = 'block';
+    document.getElementById('safeState').style.display = 'none';
+    document.getElementById('riskState').style.display = 'none';
+    
+    document.getElementById('resultsEmpty').style.display = 'none';
+    document.getElementById('resultsContent').classList.remove('active');
+    
+    document.getElementById('analyzeBtn').disabled = true;
+}
+
+// Show idle state
+function showIdleState() {
+    document.getElementById('idleState').style.display = 'block';
+    document.getElementById('analyzingState').style.display = 'none';
+    document.getElementById('safeState').style.display = 'none';
+    document.getElementById('riskState').style.display = 'none';
+    
+    document.getElementById('resultsEmpty').style.display = 'block';
+    document.getElementById('resultsContent').classList.remove('active');
+    
+    document.getElementById('analyzeBtn').disabled = false;
+}
+
+// Show analysis state
 function updateUI(data) {
-    const scoreValue = document.getElementById('scoreValue');
-    const severityLabel = document.getElementById('severityLabel');
-    const explanationText = document.getElementById('explanationText');
-    const supportMessageText = document.getElementById('supportMessageText');
-    const recommendedActionText = document.getElementById('recommendedActionText');
-    const scoreContainer = document.getElementById('scoreContainer');
-    const alertInfo = document.getElementById('alertInfo');
-    const severityMeter = document.getElementById('severityMeter');
-    const labelsContainer = document.getElementById('labelsContainer');
-
-    // Update score circle
     const score = data.toxicity_score || 0;
-    scoreValue.textContent = score;
-    severityLabel.textContent = data.severity_level || 'Unknown';
-    explanationText.textContent = data.explanation || 'Analysis completed.';
-    supportMessageText.textContent = data.victim_support_message || 'You are valued and safe.';
-    recommendedActionText.textContent = data.recommended_action || 'Continue being kind online!';
+    const severity = data.severity_level || 'Unknown';
+    const isRisk = score > 70;
 
-    // Update severity color classes
-    scoreContainer.className = 'score-display';
-    if (data.severity_level === 'Low') scoreContainer.classList.add('severity-low');
-    else if (data.severity_level === 'Medium') scoreContainer.classList.add('severity-medium');
-    else if (data.severity_level === 'High') scoreContainer.classList.add('severity-high');
-    else if (data.severity_level === 'Critical') scoreContainer.classList.add('severity-critical');
+    // Update risk section
+    document.getElementById('riskScore').textContent = score;
+    
+    const riskStatus = document.getElementById('riskStatus');
+    riskStatus.textContent = severity;
+    riskStatus.className = 'risk-status ' + (isRisk ? 'risk' : 'safe');
 
-    // Update severity meter
-    updateSeverityMeter(score);
+    // Update risk bar color
+    const riskBar = document.getElementById('riskBar');
+    riskBar.style.width = Math.min(score, 100) + '%';
+    
+    if (score <= 30) {
+        riskBar.style.background = 'linear-gradient(90deg, #10b981, #14b8a6)';
+    } else if (score <= 60) {
+        riskBar.style.background = 'linear-gradient(90deg, #f59e0b, #ec4899)';
+    } else {
+        riskBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+    }
+
+    // Update state display
+    if (isRisk) {
+        document.getElementById('idleState').style.display = 'none';
+        document.getElementById('analyzingState').style.display = 'none';
+        document.getElementById('safeState').style.display = 'none';
+        document.getElementById('riskState').style.display = 'block';
+    } else {
+        document.getElementById('idleState').style.display = 'none';
+        document.getElementById('analyzingState').style.display = 'none';
+        document.getElementById('safeState').style.display = 'block';
+        document.getElementById('riskState').style.display = 'none';
+    }
+
+    // Update analysis explanation
+    document.getElementById('explanationText').textContent = data.explanation || 'Analysis completed.';
 
     // Render detection labels
     renderLabels(data.detected_labels || {});
 
     // Show/hide parent alert
     if (data.parent_alert_required) {
-        alertInfo.style.display = 'block';
+        document.getElementById('alertInfo').style.display = 'block';
     } else {
-        alertInfo.style.display = 'none';
+        document.getElementById('alertInfo').style.display = 'none';
     }
+
+    // Show results
+    document.getElementById('resultsEmpty').style.display = 'none';
+    document.getElementById('resultsContent').classList.add('active');
+    
+    document.getElementById('analyzeBtn').disabled = false;
 }
 
-// Render detection labels as chips
+// Render minimal detection labels
 function renderLabels(labels) {
     const container = document.getElementById('labelsContainer');
     container.innerHTML = '';
 
     const labelConfig = {
-        harassment: { emoji: '🚨', label: 'Harassment' },
-        hate_speech: { emoji: '⚠️', label: 'Hate Speech' },
-        threats: { emoji: '🔴', label: 'Threats' },
-        sexual_content: { emoji: '🔒', label: 'Inappropriate' },
-        emotional_abuse: { emoji: '💔', label: 'Emotional Abuse' },
-        cyberbullying: { emoji: '📱', label: 'Cyberbullying' }
+        harassment: 'Harassment',
+        hate_speech: 'Hate Speech',
+        threats: 'Threats',
+        sexual_content: 'Inappropriate',
+        emotional_abuse: 'Abuse',
+        cyberbullying: 'Cyberbullying'
     };
 
-    let hasDetections = false;
-    for (const [key, config] of Object.entries(labelConfig)) {
+    for (const [key, label] of Object.entries(labelConfig)) {
         const detected = labels[key] || false;
         const chip = document.createElement('div');
-        chip.className = `label-chip ${detected ? 'detected' : 'safe'}`;
-        chip.innerHTML = `
-            <span class="label-emoji">${config.emoji}</span>
-            <span class="label-text">${config.label}</span>
-            <span class="label-status">${detected ? '⚠️ Detected' : '✓ Safe'}</span>
-        `;
+        chip.className = `label-minimal ${detected ? 'detected' : 'safe'}`;
+        chip.textContent = label;
         container.appendChild(chip);
-        if (detected) hasDetections = true;
-    }
-
-    if (!hasDetections) {
-        const safeMessage = document.createElement('p');
-        safeMessage.className = 'safe-message';
-        safeMessage.textContent = '✨ No harmful content detected!';
-        container.insertBefore(safeMessage, container.firstChild);
     }
 }
 
-// Update severity meter based on score
-function updateSeverityMeter(score) {
-    const meter = document.getElementById('severityMeter');
-    meter.style.width = Math.min(score, 100) + '%';
+// Add analysis to history
+function addToHistory(text, data) {
+    const summary = text.substring(0, 40) + (text.length > 40 ? '...' : '');
+    const severity = data.severity_level || 'Unknown';
+    const timestamp = new Date().toLocaleTimeString();
     
-    // Color based on severity
-    if (score <= 30) meter.style.background = 'linear-gradient(90deg, #10b981, #06b6d4)';
-    else if (score <= 60) meter.style.background = 'linear-gradient(90deg, #f59e0b, #ec4899)';
-    else meter.style.background = 'linear-gradient(90deg, #ff006e, #dc2626)';
+    analysisHistory.unshift({
+        text: summary,
+        severity: severity,
+        score: data.toxicity_score,
+        time: timestamp
+    });
+
+    // Keep only last 5 analyses
+    if (analysisHistory.length > 5) {
+        analysisHistory.pop();
+    }
+
+    updateInsightsPanel();
 }
+
+// Update insights panel
+function updateInsightsPanel() {
+    const panel = document.getElementById('insightsPanel');
+    
+    if (analysisHistory.length === 0) {
+        panel.innerHTML = '<p class="text-muted">No recent analysis</p>';
+        return;
+    }
+
+    panel.innerHTML = analysisHistory.map(item => `
+        <div class="insight-item">
+            <strong>${item.time}</strong> - ${item.severity} (${item.score}/100)<br>
+            <em>${item.text}</em>
+        </div>
+    `).join('');
+}
+
+// Initialize
+window.addEventListener('DOMContentLoaded', function() {
+    showIdleState();
+});
