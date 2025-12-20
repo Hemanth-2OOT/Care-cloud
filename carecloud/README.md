@@ -51,6 +51,40 @@ The app will start at `http://127.0.0.1:5000`.
    - View the reason for alerts (severity, explanation) without seeing the raw abusive content (privacy-first).
    - Access guidance on how to have supportive conversations with your child.
 
+## Google Cloud Integration (Cost-Efficient)
+This backend is designed to run on **Google Cloud Run** with minimal costs.
+
+### Cloud Architecture
+- **Compute**: Cloud Run (scales to zero when idle).
+- **AI**: Gemini 1.5 Flash (low cost, low latency).
+- **Secrets**: Google Cloud Secret Manager (secure credential storage).
+- **Logging**: Google Cloud Logging (centralized logs).
+- **Database**: SQLite (Ephemeral for demo). *For production, swap with Firestore or Cloud SQL.*
+
+### Deployment Steps
+
+1. **Set up Google Cloud Project**
+   ```bash
+   export PROJECT_ID="your-project-id"
+   gcloud config set project $PROJECT_ID
+   ```
+
+2. **Create Secrets**
+   ```bash
+   echo -n "your_api_key" | gcloud secrets create GEMINI_API_KEY --data-file=-
+   echo -n "your_email" | gcloud secrets create MAIL_USERNAME --data-file=-
+   echo -n "your_password" | gcloud secrets create MAIL_PASSWORD --data-file=-
+   ```
+
+3. **Deploy to Cloud Run**
+   ```bash
+   gcloud run deploy carecloud-backend \
+     --source . \
+     --region us-central1 \
+     --allow-unauthenticated \
+     --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest,MAIL_USERNAME=MAIL_USERNAME:latest,MAIL_PASSWORD=MAIL_PASSWORD:latest
+   ```
+
 ## Demo Notes
-- If no API key is provided, the app runs in a "Mock Mode" returning safe default values for demonstration purposes.
-- To test the email feature, ensure valid SMTP credentials are in `.env`.
+- If no API key is provided, the app runs in a "Mock Mode" returning safe default values.
+- **Note on Persistence**: This demo uses an in-memory SQLite database inside the container. Data will be lost when the container scales down (cold start). For permanent storage, integrate **Firestore**.

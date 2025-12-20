@@ -1,6 +1,7 @@
 import os
 import json
 import smtplib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
@@ -12,15 +13,56 @@ from datetime import datetime
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# Load environment variables
+# Google Cloud Imports
+import google.cloud.logging
+from google.cloud import secretmanager
+
+# Load environment variables (local dev)
 load_dotenv()
 
+# --- Google Cloud Configuration ---
+# Function to access secrets from Secret Manager
+def get_secret(secret_id, project_id=None):
+    """
+    Retrieves a secret from Google Cloud Secret Manager.
+    Tries environment variable first, then falls back to Secret Manager.
+    """
+    # 1. Try Local Environment Variable first
+    if os.getenv(secret_id):
+        return os.getenv(secret_id)
+
+    # 2. Try Secret Manager (if PROJECT_ID env var is set or project_id provided)
+    project_id = project_id or os.getenv('GOOGLE_CLOUD_PROJECT')
+
+    if project_id:
+        client = secretmanager.SecretManagerServiceClient()
+        name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
+        try:
+            response = client.access_secret_version(request={"name": name})
+            return response.payload.data.decode("UTF-8")
+        except Exception as e:
+            print(f"Warning: Failed to fetch secret {secret_id} from Secret Manager: {e}")
+            return None
+    return None
+
+# Setup Google Cloud Logging
+if os.getenv('GOOGLE_CLOUD_PROJECT'):
+    try:
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+    except Exception as e:
+        print(f"Warning: Failed to setup Google Cloud Logging: {e}")
+
+# Configure Secrets
+GENAI_API_KEY = get_secret('GEMINI_API_KEY')
+MAIL_USERNAME = get_secret('MAIL_USERNAME')
+MAIL_PASSWORD = get_secret('MAIL_PASSWORD')
+
 # Configure Gemini AI
-GENAI_API_KEY = os.getenv('GEMINI_API_KEY')
 if GENAI_API_KEY:
     genai.configure(api_key=GENAI_API_KEY)
 else:
-    print("Warning: GEMINI_API_KEY not found in environment variables.")
+    logging.warning("GEMINI_API_KEY not found. AI features will run in mock mode.")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'carecloud-secret-key-change-this-in-prod'
@@ -145,12 +187,46 @@ def dashboard():
     # Fallback
     return render_template('dashboard_child.html', user=current_user)
 
+# --- API Endpoints (REST) ---
+
+@app.route('/api/parent/alerts', methods=['GET'])
+@login_required
+def api_parent_alerts():
+    """
+    REST Endpoint to retrieve alerts for a parent.
+    Input: Implicitly current_user (parent)
+    Output: JSON list of alerts
+    """
+    if current_user.role != 'parent':
+        return jsonify({'error': 'Unauthorized access'}), 403
+
+    # Find children linked to this parent
+    children = User.query.filter_by(parent_email=current_user.email).all()
+    child_ids = [child.id for child in children]
+
+    # Fetch alerts
+    alerts = Alert.query.filter(Alert.child_id.in_(child_ids)).order_by(Alert.timestamp.desc()).all()
+
+    # Format output (No raw content, only reason/severity)
+    alert_list = []
+    for alert in alerts:
+        alert_list.append({
+            'timestamp': alert.timestamp.isoformat(),
+            'child_name': alert.child.name,
+            'toxicity_score': alert.toxicity_score,
+            'severity_level': alert.severity_level,
+            'explanation': alert.explanation
+        })
+
+    return jsonify({'alerts': alert_list})
+
+
 def send_email_alert(parent_email, student_name, score, severity, explanation):
-    sender_email = os.getenv('MAIL_USERNAME')
-    sender_password = os.getenv('MAIL_PASSWORD')
+    sender_email = MAIL_USERNAME
+    sender_password = MAIL_PASSWORD
 
     if not sender_email or not sender_password:
-        print("Email credentials not set. Skipping email alert.")
+        logging.warning("Email credentials not set. Skipping email alert.")
         return False
 
     msg = MIMEMultipart()
@@ -216,7 +292,8 @@ def analyze():
         })
 
     try:
-        model_name = 'gemini-1.5-flash' # Supports both text and images
+        # Cost Constraint: Use Gemini Flash model (low cost, high speed)
+        model_name = 'gemini-1.5-flash'
         model = genai.GenerativeModel(model_name)
 
         content_parts = []
@@ -285,4 +362,7 @@ def analyze():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, port=5000)
+
+    # Run on PORT provided by Cloud Run, or default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)
