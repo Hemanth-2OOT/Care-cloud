@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Hello, {{ user.name }} 👋</h1>
+    <p>Let's make sure your content is safe and kind.</p>
+</div>
+
+<div class="dashboard-grid">
+    <!-- Input Section -->
+    <div class="card input-section">
+        <h2>Check Content</h2>
+        <form id="analyzeForm">
+            <div class="form-group">
+                <label for="text_content">Paste text message or comment</label>
+                <textarea id="text_content" name="text_content" rows="6" placeholder="Type something here..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="image_file">Or upload a screenshot (optional)</label>
+                <input type="file" id="image_file" name="image_file" accept="image/*">
+            </div>
+
+            <button type="submit" class="btn-primary" id="analyzeBtn">Analyze Content</button>
+        </form>
+    </div>
+
+    <!-- Results Section -->
+    <div class="card">
+        <h2>Analysis Results</h2>
+
+        <div id="loading" class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Analyzing with Gemini AI...</p>
+        </div>
+
+        <div id="initialState">
+            <p class="text-secondary">Submit content to see the analysis here.</p>
+        </div>
+
+        <div id="results" class="results-section">
+            <div class="score-display" id="scoreContainer">
+                <div class="score-circle">
+                    <span class="score-value" id="scoreValue">0</span>
+                    <span class="score-label" id="severityLabel">Safe</span>
+                </div>
+            </div>
+
+            <div class="result-card explanation">
+                <h3>Analysis</h3>
+                <p id="explanationText">No harmful content detected.</p>
+            </div>
+
+            <div class="result-card support-message" id="supportMessageContainer">
+                <h3>Support Message</h3>
+                <p id="supportMessageText">You're doing great! Keep spreading positivity.</p>
+            </div>
+
+            <div id="alertInfo" style="display: none; margin-top: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
+                <p>ℹ️ A report has been sent to your parent/guardian for support.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+{% endblock %}

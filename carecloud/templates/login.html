@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Login / Signup{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h1>{{ 'Welcome Back' if mode == 'login' else 'Create Account' }}</h1>
+        <p class="auth-subtitle">
+            {{ 'Sign in to continue to CareCloud' if mode == 'login' else 'Join CareCloud for a safer online experience' }}
+        </p>
+
+        <form method="POST" action="{{ url_for('login') if mode == 'login' else url_for('signup') }}">
+
+            {% if mode == 'signup' %}
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" required placeholder="John Doe">
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" required placeholder="you@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••">
+            </div>
+
+            {% if mode == 'signup' %}
+            <div class="form-group">
+                <label for="parent_email">Parent/Guardian Email</label>
+                <input type="email" id="parent_email" name="parent_email" required placeholder="parent@example.com">
+                <small>We'll notify them only in emergencies.</small>
+            </div>
+            {% endif %}
+
+            <button type="submit" class="btn-primary">
+                {{ 'Login' if mode == 'login' else 'Sign Up' }}
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            {% if mode == 'login' %}
+            <p>Don't have an account? <a href="{{ url_for('signup') }}">Sign up</a></p>
+            {% else %}
+            <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
