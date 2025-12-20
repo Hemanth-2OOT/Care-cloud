@@ -10,6 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import PIL.Image
 from dotenv import load_dotenv
 import google.generativeai as genai
+import pytesseract
 
 # Load environment variables
 load_dotenv()
@@ -22,7 +23,7 @@ else:
     print("Warning: GEMINI_API_KEY not found in environment variables.")
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'carecloud-secret-key-change-this-in-prod'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this-in-prod')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -138,7 +139,6 @@ def send_email_alert(parent_email, student_name, score, severity):
     msg.attach(MIMEText(body, 'plain'))
 
     try:
-        # Connect to Gmail's SMTP server (or change for other providers)
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
@@ -154,6 +154,7 @@ def send_email_alert(parent_email, student_name, score, severity):
 @app.route('/analyze', methods=['POST'])
 @login_required
 def analyze():
+    # Expecting 'text' in form and 'image' in files (script.js uses these keys)
     text_content = request.form.get('text', '')
     image_file = request.files.get('image')
 
@@ -161,7 +162,7 @@ def analyze():
         return jsonify({'error': 'No text content or image provided'}), 400
 
     if not GENAI_API_KEY:
-         # Mock response for testing/demo without API key
+        # Mock response for testing/demo without API key
         return jsonify({
             "toxicity_score": 0,
             "severity_level": "Low",
@@ -171,42 +172,51 @@ def analyze():
         })
 
     try:
-        model_name = 'gemini-1.5-flash' # Supports both text and images
+        # OCR step (if an image was uploaded)
+        ocr_text = ''
+        if image_file:
+            try:
+                img = PIL.Image.open(image_file)
+                # Optional: convert to RGB for some images
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                ocr_text = pytesseract.image_to_string(img)
+                ocr_text = ocr_text.strip()
+            except Exception as e:
+                print(f"Failed to process image for OCR: {e}")
+                ocr_text = ''
+
+        # Build the prompt for Gemini
+        model_name = 'gemini-1.5-flash'
         model = genai.GenerativeModel(model_name)
 
-        content_parts = []
-
         prompt_text = """
-        Analyze the following content (text and/or image) for cyberbullying, toxicity, harassment, hate speech, and threats.
-        If there is an image, extract relevant text and analyze the visual context as well.
+        Analyze the following content (text and/or OCR-extracted text from an image) for cyberbullying, toxicity, harassment, hate speech, and threats.
+        Provide a JSON object with the fields:
+          - toxicity_score: integer (0-100)
+          - severity_level: string ("Low", "Medium", "High", "Critical")
+          - explanation: string (brief explanation of why it was flagged or not)
+          - victim_support_message: string (empathetic message for the user)
+          - parent_alert_required: boolean (true if toxicity_score > 70)
 
-        Return a valid JSON object with the following fields:
-        - toxicity_score: integer (0-100)
-        - severity_level: string ("Low", "Medium", "High", "Critical")
-        - explanation: string (brief explanation of why it was flagged or not)
-        - victim_support_message: string (empathetic message for the user)
-        - parent_alert_required: boolean (true if toxicity_score > 70)
-
-        Do not include markdown formatting like ```json ... ```. Just the raw JSON string.
+        Return only the raw JSON (no markdown code fences).
         """
-        content_parts.append(prompt_text)
 
+        content_parts = [prompt_text]
         if text_content:
-             content_parts.append(f"Text Input: {text_content}")
+            content_parts.append(f"Text Input: {text_content}")
+        if ocr_text:
+            content_parts.append(f"OCR Extracted Text: {ocr_text}")
 
-        if image_file:
-            img = PIL.Image.open(image_file)
-            content_parts.append(img)
-
+        # Call the model
         response = model.generate_content(content_parts)
-        # Clean up response text in case it contains markdown code blocks
-        response_text = response.text.strip()
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.startswith("```"):
-            response_text = response_text[3:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
+        response_text = getattr(response, 'text', str(response)).strip()
+
+        # Try to extract JSON substring in case the model added commentary
+        first = response_text.find('{')
+        last = response_text.rfind('}')
+        if first != -1 and last != -1 and last > first:
+            response_text = response_text[first:last+1]
 
         analysis_result = json.loads(response_text)
 
@@ -215,17 +225,21 @@ def analyze():
             send_email_alert(
                 current_user.parent_email,
                 current_user.name,
-                analysis_result['toxicity_score'],
-                analysis_result['severity_level']
+                analysis_result.get('toxicity_score', 0),
+                analysis_result.get('severity_level', 'Unknown')
             )
 
         return jsonify(analysis_result)
 
+    except json.JSONDecodeError as je:
+        print(f"Failed to parse model output as JSON: {je}")
+        return jsonify({'error': 'Failed to parse model output'}), 500
     except Exception as e:
-        print(f"Error calling Gemini: {e}")
+        print(f"Error calling Gemini or processing request: {e}")
         return jsonify({'error': 'Failed to analyze content'}), 500
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', debug=True, port=port)

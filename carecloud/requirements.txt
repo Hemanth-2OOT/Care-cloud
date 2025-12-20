@@ -5,3 +5,4 @@ google-generativeai
 werkzeug
 python-dotenv
 Pillow
+pytesseract
