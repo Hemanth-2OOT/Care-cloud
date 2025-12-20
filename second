@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KindNest | Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      height: 100vh;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 420px;
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    h1 {
+      color: #6c63ff;
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 30px;
+    }
+
+    .role-buttons {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .role-buttons button {
+      flex: 1;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .parent {
+      background: #6c63ff;
+      color: white;
+    }
+
+    .child {
+      background: #ffb703;
+      color: #333;
+    }
+
+    .role-buttons button:hover {
+      transform: scale(1.05);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 15px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 25px;
+      border: none;
+      background: #6c63ff;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .google-btn {
+      margin-top: 10px;
+      background: #db4437;
+    }
+
+    .back {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #6c63ff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- STEP 1 -->
+  <div id="step1">
+    <h1>🌱 KindNest</h1>
+    <p>Choose how you want to continue</p>
+
+    <div class="role-buttons">
+      <button class="parent" onclick="chooseRole('parent')">👨‍👩‍👧 Parent</button>
+      <button class="child" onclick="chooseRole('child')">🧒 Child</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div id="step2" class="hidden">
+    <h1 id="roleTitle"></h1>
+    <p id="roleDesc"></p>
+
+    <input type="email" placeholder="Email">
+    <input type="password" placeholder="Password">
+
+    <button class="login-btn" onclick="login()">Login / Sign Up</button>
+
+    <!-- Parent Gmail -->
+    <button id="googleLogin" class="login-btn google-btn hidden">
+      Continue with Google
+    </button>
+
+    <div class="back" onclick="goBack()">← Change role</div>
+  </div>
+
+</div>
+
+<script>
+  let role = "";
+
+  function chooseRole(selected) {
+    role = selected;
+    document.getElementById("step1").classList.add("hidden");
+    document.getElementById("step2").classList.remove("hidden");
+
+    if (role === "parent") {
+      document.getElementById("roleTitle").innerText = "Parent Login";
+      document.getElementById("roleDesc").innerText =
+        "Login using Gmail to manage your child's safety.";
+      document.getElementById("googleLogin").classList.remove("hidden");
+    } else {
+      document.getElementById("roleTitle").innerText = "Child Login";
+      document.getElementById("roleDesc").innerText =
+        "Login to your safe and supportive dashboard.";
+      document.getElementById("googleLogin").classList.add("hidden");
+    }
+  }
+
+  function goBack() {
+    document.getElementById("step2").classList.add("hidden");
+    document.getElementById("step1").classList.remove("hidden");
+  }
+
+  function login() {
+    if (role === "parent") {
+      window.location.href = "parent-dashboard.html";
+    } else {
+      window.location.href = "child-dashboard.html";
+    }
+  }
+</script>
+
+</body>
+</html>
