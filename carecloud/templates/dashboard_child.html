@@ -4,17 +4,17 @@
 
 {% block content %}
 <div class="dashboard-header">
-    <h1>Hello, {{ user.name }} 👋</h1>
-    <p>Let's make sure your content is safe and kind.</p>
+    <h1>Hi there, {{ user.name }}! 🌟</h1>
+    <p>We're here to help you stay positive and safe online.</p>
 </div>
 
 <div class="dashboard-grid">
     <!-- Input Section -->
     <div class="card input-section">
-        <h2>Check Content</h2>
+        <h2>Check Your Message</h2>
+        <p class="section-desc">Not sure if a message is okay? Paste it here and let's see.</p>
         <form id="analyzeForm">
             <div class="form-group">
-                <label for="text_content">Paste text message or comment</label>
                 <textarea id="text_content" name="text_content" rows="6" placeholder="Type something here..."></textarea>
             </div>
 
@@ -23,45 +23,57 @@
                 <input type="file" id="image_file" name="image_file" accept="image/*">
             </div>
 
-            <button type="submit" class="btn-primary" id="analyzeBtn">Analyze Content</button>
+            <button type="submit" class="btn-primary" id="analyzeBtn">Check Now ✨</button>
         </form>
     </div>
 
     <!-- Results Section -->
     <div class="card">
-        <h2>Analysis Results</h2>
+        <h2>What we found</h2>
 
         <div id="loading" class="loading-spinner">
             <div class="spinner"></div>
-            <p>Analyzing with Gemini AI...</p>
+            <p>Thinking...</p>
         </div>
 
         <div id="initialState">
-            <p class="text-secondary">Submit content to see the analysis here.</p>
+            <p class="text-secondary">Your results will appear here.</p>
         </div>
 
         <div id="results" class="results-section">
             <div class="score-display" id="scoreContainer">
                 <div class="score-circle">
-                    <span class="score-value" id="scoreValue">0</span>
+                    <!-- <span class="score-value" id="scoreValue">0</span> -->
                     <span class="score-label" id="severityLabel">Safe</span>
                 </div>
             </div>
 
             <div class="result-card explanation">
-                <h3>Analysis</h3>
-                <p id="explanationText">No harmful content detected.</p>
+                <h3>Here's what I think:</h3>
+                <p id="explanationText">This looks okay!</p>
             </div>
 
             <div class="result-card support-message" id="supportMessageContainer">
-                <h3>Support Message</h3>
+                <h3>CareCloud says:</h3>
                 <p id="supportMessageText">You're doing great! Keep spreading positivity.</p>
             </div>
 
-            <div id="alertInfo" style="display: none; margin-top: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
-                <p>ℹ️ A report has been sent to your parent/guardian for support.</p>
+            <!-- Gentle Alert Info -->
+            <div id="alertInfo" style="display: none; margin-top: 1rem; padding: 1rem; background-color: #fffbeb; border-radius: 0.5rem; text-align: center;">
+                <p>💜 We've shared a heads-up with your parent so they can support you.</p>
             </div>
         </div>
+    </div>
+
+    <!-- Persistent Positive Suggestions -->
+    <div class="card positive-suggestions-card">
+        <h3>💡 Quick Tips for Positivity</h3>
+        <ul>
+            <li>Take a deep breath before hitting send. 🌬️</li>
+            <li>If you're feeling upset, talk to a friend or adult. 🗣️</li>
+            <li>Kind words make everyone's day better! 💖</li>
+            <li>It's okay to take a break from the screen. 🌳</li>
+        </ul>
     </div>
 </div>
 

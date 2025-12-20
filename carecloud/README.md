@@ -34,13 +34,22 @@ python app.py
 The app will start at `http://127.0.0.1:5000`.
 
 ## Usage Flow
-1. **Signup**: Create an account with your name, email, password, and a parent's email.
-2. **Dashboard**: Enter text in the analysis box.
-3. **Analyze**: Click "Analyze Content". The system will use Gemini AI to check for toxicity.
-4. **Results**:
-   - View the toxicity score and severity.
-   - Read the explanation and support message.
-   - If the score is > 70 (High/Critical), an email is automatically sent to the parent email provided during signup.
+1. **Signup**:
+   - Choose your role: **Child** or **Parent**.
+   - **Children**: Must provide a parent's email address to link accounts.
+   - **Parents**: Create an account to monitor alerts.
+2. **Child Dashboard**:
+   - Enter text or upload an image to check for harmful content.
+   - Receive gentle feedback, toxicity explanations, and positive emotional support suggestions.
+3. **Analysis**:
+   - The system uses Gemini AI (gemini-1.5-flash) to analyze content.
+   - If high toxicity (>70) is detected:
+     - An alert is saved to the database.
+     - A supportive email is sent to the parent.
+4. **Parent Dashboard**:
+   - Log in to view an activity feed of alerts for all linked children.
+   - View the reason for alerts (severity, explanation) without seeing the raw abusive content (privacy-first).
+   - Access guidance on how to have supportive conversations with your child.
 
 ## Demo Notes
 - If no API key is provided, the app runs in a "Mock Mode" returning safe default values for demonstration purposes.

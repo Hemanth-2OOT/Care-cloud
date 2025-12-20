@@ -13,9 +13,24 @@
         <form method="POST" action="{{ url_for('login') if mode == 'login' else url_for('signup') }}">
 
             {% if mode == 'signup' %}
+            <div class="role-selection">
+                <label class="role-card" onclick="selectRole('child')">
+                    <input type="radio" name="role" value="child" style="display:none;" required>
+                    <span class="role-icon">👦</span>
+                    <span class="role-title">I am a Child</span>
+                    <span class="role-desc">I want help staying safe and positive online</span>
+                </label>
+                <label class="role-card" onclick="selectRole('parent')">
+                    <input type="radio" name="role" value="parent" style="display:none;">
+                    <span class="role-icon">👨‍👩‍👧</span>
+                    <span class="role-title">I am a Parent</span>
+                    <span class="role-desc">I want to support and protect my child</span>
+                </label>
+            </div>
+
             <div class="form-group">
                 <label for="name">Full Name</label>
-                <input type="text" id="name" name="name" required placeholder="John Doe">
+                <input type="text" id="name" name="name" required placeholder="Your Name">
             </div>
             {% endif %}
 
@@ -30,11 +45,35 @@
             </div>
 
             {% if mode == 'signup' %}
-            <div class="form-group">
+            <div class="form-group" id="parent-email-group" style="display:none;">
                 <label for="parent_email">Parent/Guardian Email</label>
-                <input type="email" id="parent_email" name="parent_email" required placeholder="parent@example.com">
-                <small>We'll notify them only in emergencies.</small>
+                <input type="email" id="parent_email" name="parent_email" placeholder="parent@example.com">
+                <small>We'll notify them if we find something hurtful.</small>
             </div>
+
+            <script>
+                function selectRole(role) {
+                    // Update visual selection
+                    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+                    event.currentTarget.classList.add('selected');
+
+                    // Handle Parent Email field visibility
+                    const parentEmailGroup = document.getElementById('parent-email-group');
+                    const parentEmailInput = document.getElementById('parent_email');
+
+                    if (role === 'child') {
+                        parentEmailGroup.style.display = 'block';
+                        parentEmailInput.required = true;
+                    } else {
+                        parentEmailGroup.style.display = 'none';
+                        parentEmailInput.required = false;
+                        parentEmailInput.value = ''; // clear it
+                    }
+
+                    // Actually check the radio button (handled by label but good to ensure)
+                    document.querySelector(`input[value="${role}"]`).checked = true;
+                }
+            </script>
             {% endif %}
 
             <button type="submit" class="btn-primary">

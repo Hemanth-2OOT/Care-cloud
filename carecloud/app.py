@@ -8,6 +8,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import PIL.Image
+from datetime import datetime
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -34,16 +35,29 @@ login_manager.login_view = 'login'
 # --- Models ---
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(20), nullable=False)  # 'child' or 'parent'
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
-    parent_email = db.Column(db.String(100), nullable=False)
+    # For child accounts: linked parent email
+    parent_email = db.Column(db.String(100), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class Alert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    child_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    toxicity_score = db.Column(db.Integer, nullable=False)
+    severity_level = db.Column(db.String(50), nullable=False)
+    explanation = db.Column(db.Text, nullable=False)
+
+    # Relationship to access child details
+    child = db.relationship('User', backref=db.backref('alerts', lazy=True))
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -60,17 +74,27 @@ def index():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
+        role = request.form.get('role')
         name = request.form.get('name')
         email = request.form.get('email')
         password = request.form.get('password')
         parent_email = request.form.get('parent_email')
+
+        # Validation
+        if not role:
+            flash('Please select a role (Child or Parent).')
+            return redirect(url_for('signup'))
+
+        if role == 'child' and not parent_email:
+            flash('Parent email is required for child accounts.')
+            return redirect(url_for('signup'))
 
         user = User.query.filter_by(email=email).first()
         if user:
             flash('Email already exists')
             return redirect(url_for('signup'))
 
-        new_user = User(name=name, email=email, parent_email=parent_email)
+        new_user = User(role=role, name=name, email=email, parent_email=parent_email if role == 'child' else None)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
@@ -105,9 +129,23 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html', user=current_user)
+    if current_user.role == 'child':
+        return render_template('dashboard_child.html', user=current_user)
+    elif current_user.role == 'parent':
+        # Fetch alerts for all children linked to this parent
+        # Find children first
+        children = User.query.filter_by(parent_email=current_user.email).all()
+        child_ids = [child.id for child in children]
 
-def send_email_alert(parent_email, student_name, score, severity):
+        # Then fetch alerts
+        alerts = Alert.query.filter(Alert.child_id.in_(child_ids)).order_by(Alert.timestamp.desc()).all()
+
+        return render_template('dashboard_parent.html', user=current_user, alerts=alerts, children=children)
+
+    # Fallback
+    return render_template('dashboard_child.html', user=current_user)
+
+def send_email_alert(parent_email, student_name, score, severity, explanation):
     sender_email = os.getenv('MAIL_USERNAME')
     sender_password = os.getenv('MAIL_PASSWORD')
 
@@ -118,22 +156,29 @@ def send_email_alert(parent_email, student_name, score, severity):
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = parent_email
-    msg['Subject'] = f"CareCloud Alert: Emotional Support Needed for {student_name}"
+    msg['Subject'] = f"CareCloud: Gentle Check-in for {student_name}"
 
     body = f"""
-    Dear Parent/Guardian,
+    Hello,
 
-    CareCloud has detected content associated with {student_name}'s account that may be emotionally harmful.
+    We wanted to share a quick update regarding {student_name}'s recent activity on CareCloud.
+    Our system noticed some content that might be emotionally challenging or harmful.
 
-    Analysis Summary:
-    - Toxicity Score: {score}/100
-    - Severity Level: {severity}
+    What we found:
+    - Category: {severity} impact
+    - Context: {explanation}
 
-    We encourage you to have a supportive, non-judgmental conversation with {student_name}.
-    Please approach this with empathy and care. The goal is emotional safety, not punishment.
+    (Note: To respect privacy and encourage trust, we do not include the raw text here.)
 
-    Best regards,
-    The CareCloud Team
+    Suggested Next Steps:
+    1. Approach {student_name} with curiosity and care.
+    2. Ask: "I noticed you might be dealing with something tough. Do you want to talk about it?"
+    3. Listen without judgment.
+
+    Thank you for being a supportive part of {student_name}'s digital life.
+
+    Warmly,
+    The CareCloud Team 💜
     """
     msg.attach(MIMEText(body, 'plain'))
 
@@ -212,11 +257,23 @@ def analyze():
 
         # Trigger email alert if needed
         if analysis_result.get('parent_alert_required', False):
+            # Save Alert to Database
+            new_alert = Alert(
+                child_id=current_user.id,
+                toxicity_score=analysis_result['toxicity_score'],
+                severity_level=analysis_result['severity_level'],
+                explanation=analysis_result['explanation']
+            )
+            db.session.add(new_alert)
+            db.session.commit()
+
+            # Send Email
             send_email_alert(
                 current_user.parent_email,
                 current_user.name,
                 analysis_result['toxicity_score'],
-                analysis_result['severity_level']
+                analysis_result['severity_level'],
+                analysis_result['explanation']
             )
 
         return jsonify(analysis_result)

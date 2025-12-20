@@ -1,4 +1,4 @@
-/app/carecloud/app.py:12: FutureWarning:
+/app/carecloud/app.py:13: FutureWarning:
 
 All support for the `google.generativeai` package has ended. It will no longer be receiving
 updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
@@ -14,7 +14,7 @@ Warning: GEMINI_API_KEY not found in environment variables.
  * Running on http://127.0.0.1:5000
 [33mPress CTRL+C to quit[0m
  * Restarting with stat
-/app/carecloud/app.py:12: FutureWarning:
+/app/carecloud/app.py:13: FutureWarning:
 
 All support for the `google.generativeai` package has ended. It will no longer be receiving
 updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
@@ -25,6 +25,8 @@ https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/READM
   import google.generativeai as genai
  * Debugger is active!
  * Debugger PIN: 132-491-319
-/app/carecloud/app.py:50: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+127.0.0.1 - - [20/Dec/2025 12:45:48] "[32mPOST /signup HTTP/1.1[0m" 302 -
+127.0.0.1 - - [20/Dec/2025 12:46:06] "[32mPOST /login HTTP/1.1[0m" 302 -
+/app/carecloud/app.py:64: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
   return User.query.get(int(user_id))
-127.0.0.1 - - [20/Dec/2025 09:00:35] "POST /analyze HTTP/1.1" 200 -
+127.0.0.1 - - [20/Dec/2025 12:46:21] "GET /dashboard HTTP/1.1" 200 -

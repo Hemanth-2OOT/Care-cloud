@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Parent Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Welcome, {{ user.name }} 🛡️</h1>
+    <p>Monitoring your linked children's accounts for emotional safety.</p>
+</div>
+
+<div class="dashboard-grid">
+    <!-- Alerts Section -->
+    <div class="card">
+        <h2>Activity Alerts</h2>
+        <p class="section-desc">We'll notify you here if we detect anything that might need your attention.</p>
+
+        {% if alerts %}
+            <div class="alerts-list">
+                {% for alert in alerts %}
+                    <div class="alert-item severity-{{ alert.severity_level|lower }}">
+                        <div class="alert-header">
+                            <span class="alert-date">{{ alert.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
+                            <span class="alert-badge">{{ alert.severity_level }}</span>
+                            <span class="alert-child">Child: <strong>{{ alert.child.name }}</strong></span>
+                        </div>
+                        <div class="alert-body">
+                            <h4>Reason for Alert:</h4>
+                            <p>{{ alert.explanation }}</p>
+                        </div>
+                        <div class="alert-footer">
+                            <small>Toxicity Score: {{ alert.toxicity_score }}/100</small>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <p>✅ All clear! No harmful content detected recently.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Guidance Section -->
+    <div class="card">
+        <h2>Parental Guidance 💙</h2>
+        <p>Tips for having supportive conversations.</p>
+
+        <div class="guidance-list">
+            <div class="guidance-item">
+                <h3>🗣️ How to Talk About It</h3>
+                <p>Approach with curiosity, not anger. "I noticed you might be dealing with something tough online. Want to tell me about it?"</p>
+            </div>
+
+            <div class="guidance-item">
+                <h3>👂 Listen First</h3>
+                <p>Let them explain the context without interrupting. They might be the victim, or they might have made a mistake in the heat of the moment.</p>
+            </div>
+
+            <div class="guidance-item">
+                <h3>🤝 Focus on Impact</h3>
+                <p>Help them understand how words affect feelings. "How do you think reading that would make someone feel?"</p>
+            </div>
+
+            <div class="guidance-item">
+                <h3>🛑 When to Step In</h3>
+                <p>If you see signs of severe threats, self-harm, or persistent harassment, it may be time to block users or report content on the platform.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
