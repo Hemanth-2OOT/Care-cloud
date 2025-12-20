@@ -111,7 +111,7 @@ def load_user(user_id):
 def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    return render_template('index.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():

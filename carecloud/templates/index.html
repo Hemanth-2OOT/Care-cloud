@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to CareCloud{% endblock %}
+
+{% block content %}
+<div class="landing-container">
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1>Making the Internet a Safer Place for Kids ☁️</h1>
+            <p>CareCloud is an AI-powered companion that helps children navigate online interactions safely and gives parents peace of mind.</p>
+            <div class="cta-buttons">
+                <a href="{{ url_for('signup') }}" class="btn-primary btn-large">Get Started</a>
+                <a href="{{ url_for('login') }}" class="btn-secondary btn-large">Login</a>
+            </div>
+        </div>
+        <div class="hero-image">
+            <span style="font-size: 8rem;">🛡️</span>
+        </div>
+    </section>
+
+    <section class="features-section">
+        <h2 class="section-title">How It Works</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3>Smart Analysis</h3>
+                <p>Our friendly AI checks messages for harmful content like bullying or hate speech.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💜</div>
+                <h3>Emotional Support</h3>
+                <p>We provide immediate, non-judgmental support and positive suggestions for kids.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">👨‍👩‍👧</div>
+                <h3>Parental Guidance</h3>
+                <p>Parents receive alerts for serious issues, along with tips on how to help.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="roles-section">
+        <h2 class="section-title">Who is it for?</h2>
+        <div class="roles-grid">
+            <div class="role-info-card">
+                <h3>For Children</h3>
+                <p>A safe space to check if a message is okay to send or receive. We help you handle tough situations with confidence.</p>
+            </div>
+            <div class="role-info-card">
+                <h3>For Parents</h3>
+                <p>Stay informed without being intrusive. Get notified only when it matters, with advice on supportive conversations.</p>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
