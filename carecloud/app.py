@@ -223,17 +223,23 @@ def analyze():
         JSON fields:
         - toxicity_score: 0-100
         - severity_level: "Low", "Medium", "High", or "Critical"
-        - explanation: brief reason for rating
-        - victim_support_message: empathetic message for the child
+        - explanation: Clear explanation of WHY this content is harmful (specific issues detected)
+        - victim_support_message: Empathetic, reassuring message for the child (if they are the victim)
+        - suggested_safe_responses: 2-3 example safe responses the user could use instead
         - parent_alert_required: true if score > 70
         - detected_labels: object with boolean values for: harassment, hate_speech, threats, sexual_content, emotional_abuse, cyberbullying
-        - recommended_action: string (e.g. "supportive conversation", "monitoring", "counseling")
+        - recommended_action: string (action to take, e.g. "block user", "report to platform", "talk to trusted adult")
         
-        Example labels detection:
+        Example:
         {
+          "toxicity_score": 85,
+          "severity_level": "Critical",
+          "explanation": "This message contains severe harassment and threats. It uses dehumanizing language and contains explicit threats of violence.",
+          "victim_support_message": "This is not okay. You don't deserve to be treated this way. Please talk to a trusted adult about what happened.",
+          "suggested_safe_responses": ["I'm reporting this.", "I don't engage with this behavior.", "This is unacceptable and I'm blocking you."],
           "harassment": true,
-          "hate_speech": false,
-          "threats": false,
+          "hate_speech": true,
+          "threats": true,
           "sexual_content": false,
           "emotional_abuse": true,
           "cyberbullying": true

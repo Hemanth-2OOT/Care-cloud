@@ -115,6 +115,24 @@ function updateUI(data) {
     // Render detection labels
     renderLabels(data.detected_labels || {});
 
+    // Update victim support section
+    const victimSection = document.getElementById('victimSupportSection');
+    if (data.victim_support_message && isRisk) {
+        document.getElementById('victimSupportText').textContent = data.victim_support_message;
+        victimSection.style.display = 'block';
+    } else {
+        victimSection.style.display = 'none';
+    }
+
+    // Update safe responses section
+    const responsesSection = document.getElementById('safeResponsesSection');
+    if (data.suggested_safe_responses && Array.isArray(data.suggested_safe_responses)) {
+        renderSafeResponses(data.suggested_safe_responses);
+        responsesSection.style.display = 'block';
+    } else {
+        responsesSection.style.display = 'none';
+    }
+
     // Show/hide parent alert
     if (data.parent_alert_required) {
         document.getElementById('alertInfo').style.display = 'block';
@@ -127,6 +145,19 @@ function updateUI(data) {
     document.getElementById('resultsContent').classList.add('active');
     
     document.getElementById('analyzeBtn').disabled = false;
+}
+
+// Render suggested safe responses
+function renderSafeResponses(responses) {
+    const container = document.getElementById('safeResponsesList');
+    container.innerHTML = '';
+    
+    responses.forEach(response => {
+        const item = document.createElement('div');
+        item.className = 'response-item';
+        item.textContent = response;
+        container.appendChild(item);
+    });
 }
 
 // Render minimal detection labels
