@@ -9,18 +9,23 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 import PIL.Image
 from dotenv import load_dotenv
-import google.generativeai as genai
 import pytesseract
 
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini AI
-GENAI_API_KEY = os.getenv('GEMINI_API_KEY')
-if GENAI_API_KEY:
-    genai.configure(api_key=GENAI_API_KEY)
-else:
-    print("Warning: GEMINI_API_KEY not found in environment variables.")
+# Configure Gemini AI using Replit integration (no API key needed)
+from google import genai
+from google.genai import types
+
+# This uses Replit's AI Integrations service automatically
+client = genai.Client(
+    api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY", ""),
+    http_options={
+        'api_version': '',
+        'base_url': os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL", "")   
+    }
+)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this-in-prod')
@@ -161,16 +166,6 @@ def analyze():
     if not text_content and not image_file:
         return jsonify({'error': 'No text content or image provided'}), 400
 
-    if not GENAI_API_KEY:
-        # Mock response for testing/demo without API key
-        return jsonify({
-            "toxicity_score": 0,
-            "severity_level": "Low",
-            "explanation": "Gemini API Key not configured. Using safe default.",
-            "victim_support_message": "Please configure the API key to get real analysis.",
-            "parent_alert_required": False
-        })
-
     try:
         # OCR step (if an image was uploaded)
         ocr_text = ''
@@ -186,31 +181,31 @@ def analyze():
                 print(f"Failed to process image for OCR: {e}")
                 ocr_text = ''
 
-        # Build the prompt for Gemini
-        model_name = 'gemini-1.5-flash'
-        model = genai.GenerativeModel(model_name)
-
         prompt_text = """
         Analyze the following content (text and/or OCR-extracted text from an image) for cyberbullying, toxicity, harassment, hate speech, and threats.
         Provide a JSON object with the fields:
           - toxicity_score: integer (0-100)
           - severity_level: string ("Low", "Medium", "High", "Critical")
           - explanation: string (brief explanation of why it was flagged or not)
-          - victim_support_message: string (empathetic message for the user)
+          - victim_support_message: string (empathetic, supportive message for the user)
           - parent_alert_required: boolean (true if toxicity_score > 70)
 
         Return only the raw JSON (no markdown code fences).
         """
 
-        content_parts = [prompt_text]
+        # Build content for Gemini
+        content = [prompt_text]
         if text_content:
-            content_parts.append(f"Text Input: {text_content}")
+            content.append(f"Text Input: {text_content}")
         if ocr_text:
-            content_parts.append(f"OCR Extracted Text: {ocr_text}")
+            content.append(f"OCR Extracted Text: {ocr_text}")
 
-        # Call the model
-        response = model.generate_content(content_parts)
-        response_text = getattr(response, 'text', str(response)).strip()
+        # Call Gemini AI via Replit integration
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=' '.join(content)
+        )
+        response_text = response.text.strip() if response.text else ""
 
         # Try to extract JSON substring in case the model added commentary
         first = response_text.find('{')
@@ -235,7 +230,7 @@ def analyze():
         print(f"Failed to parse model output as JSON: {je}")
         return jsonify({'error': 'Failed to parse model output'}), 500
     except Exception as e:
-        print(f"Error calling Gemini or processing request: {e}")
+        print(f"Error calling AI or processing request: {e}")
         return jsonify({'error': 'Failed to analyze content'}), 500
 
 if __name__ == '__main__':
