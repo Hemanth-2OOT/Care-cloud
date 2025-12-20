@@ -33,6 +33,15 @@ python app.py
 ```
 The app will start at `http://127.0.0.1:5000`.
 
+## Replit Deployment
+1. **Fork/Clone** this repository into Replit.
+2. The `.replit` and `replit.nix` files are already configured.
+3. Add your secrets (API Keys) in the Replit "Secrets" tool (padlock icon):
+   - `GEMINI_API_KEY`
+   - `SENDGRID_API_KEY`
+   - `SENDGRID_FROM_EMAIL` (e.g., `alerts@yourdomain.com` or verified sender)
+4. Click **Run**. The app will install dependencies and start automatically.
+
 ## Usage Flow
 1. **Signup**:
    - Choose your role: **Child** or **Parent**.

@@ -43,9 +43,13 @@
         <div id="results" class="results-section">
             <div class="score-display" id="scoreContainer">
                 <div class="score-circle">
-                    <!-- <span class="score-value" id="scoreValue">0</span> -->
+                    <span class="score-value" id="scoreValue" style="display:none;">0</span>
                     <span class="score-label" id="severityLabel">Safe</span>
                 </div>
+            </div>
+
+            <div id="categoriesDiv" class="categories-container" style="display:none; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                <!-- Badges will be injected here -->
             </div>
 
             <div class="result-card explanation">
@@ -65,7 +69,7 @@
         </div>
     </div>
 
-    <!-- Persistent Positive Suggestions -->
+    <!-- Persistent Positive Suggestions & History -->
     <div class="card positive-suggestions-card">
         <h3>💡 Quick Tips for Positivity</h3>
         <ul>
@@ -75,7 +79,50 @@
             <li>It's okay to take a break from the screen. 🌳</li>
         </ul>
     </div>
+
+    <!-- Recent Checks History -->
+    <div class="card history-card" style="margin-top: 1.5rem;">
+        <h3>My Recent Checks 🕒</h3>
+        <div id="historyList" class="history-list">
+            <p class="text-secondary" style="text-align: center;">Loading history...</p>
+        </div>
+    </div>
 </div>
+
+<script>
+    // Fetch history on load
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const response = await fetch('/api/child/history');
+            if (response.ok) {
+                const data = await response.json();
+                renderHistory(data.history);
+            }
+        } catch (e) {
+            console.error("Failed to load history", e);
+        }
+    });
+
+    function renderHistory(history) {
+        const list = document.getElementById('historyList');
+        if (!history || history.length === 0) {
+            list.innerHTML = '<p class="text-secondary" style="text-align: center;">No recent checks yet.</p>';
+            return;
+        }
+        list.innerHTML = history.map(item => `
+            <div class="history-item severity-${item.severity.toLowerCase()}">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 500;">${item.timestamp}</span>
+                    <span class="badge badge-${item.severity.toLowerCase()}">${item.severity}</span>
+                </div>
+                ${item.categories.length > 0 ?
+                    `<div style="margin-top: 0.5rem; display: flex; gap: 0.25rem;">
+                        ${item.categories.map(c => `<span style="font-size: 0.75rem; background: #eee; padding: 2px 6px; border-radius: 4px;">${c}</span>`).join('')}
+                    </div>` : ''}
+            </div>
+        `).join('');
+    }
+</script>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 {% endblock %}

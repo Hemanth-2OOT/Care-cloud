@@ -8,3 +8,4 @@ Pillow
 google-cloud-secret-manager
 google-cloud-logging
 gunicorn
+sendgrid

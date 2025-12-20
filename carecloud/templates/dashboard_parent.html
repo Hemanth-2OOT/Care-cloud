@@ -11,19 +11,40 @@
 <div class="dashboard-grid">
     <!-- Alerts Section -->
     <div class="card">
-        <h2>Activity Alerts</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2>Activity Alerts</h2>
+            <button onclick="downloadReport()" class="btn-secondary" style="font-size: 0.9rem;">📥 Download Report</button>
+        </div>
         <p class="section-desc">We'll notify you here if we detect anything that might need your attention.</p>
 
+        <div class="search-filters" style="margin-bottom: 1.5rem; display: flex; gap: 1rem;">
+            <input type="text" id="searchInput" placeholder="Search by child name or reason..." style="flex:1; padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem;">
+            <select id="severityFilter" style="padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem;">
+                <option value="all">All Severities</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+            </select>
+        </div>
+
         {% if alerts %}
-            <div class="alerts-list">
+            <div class="alerts-list" id="alertsList">
                 {% for alert in alerts %}
-                    <div class="alert-item severity-{{ alert.severity_level|lower }}">
+                    <div class="alert-item severity-{{ alert.severity_level|lower }}" data-severity="{{ alert.severity_level }}">
                         <div class="alert-header">
                             <span class="alert-date">{{ alert.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
                             <span class="alert-badge">{{ alert.severity_level }}</span>
                             <span class="alert-child">Child: <strong>{{ alert.child.name }}</strong></span>
                         </div>
                         <div class="alert-body">
+                            <!-- Categories Badge -->
+                            {% if alert.categories %}
+                                {% set cats = alert.categories | tojson | safe %} <!-- safe parsed via JS ideally but Jinja can pass it -->
+                                <div class="category-tags" style="margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.8rem; font-weight: bold; color: #6b7280;">Detected:</span>
+                                    {{ alert.categories }}
+                                </div>
+                            {% endif %}
                             <h4>Reason for Alert:</h4>
                             <p>{{ alert.explanation }}</p>
                         </div>
@@ -67,5 +88,76 @@
             </div>
         </div>
     </div>
+
+    <!-- Learn More Section -->
+    <div class="card" style="margin-top: 2rem; grid-column: span 2;">
+        <h2>Learn More 📚</h2>
+        <div class="guidance-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div class="guidance-item" style="border: none;">
+                <h3>🛡️ Online Safety Basics</h3>
+                <p>Understand privacy settings, blocking features, and how to report content on major social platforms.</p>
+                <a href="#" style="color: var(--primary-color);">Read Guide &rarr;</a>
+            </div>
+            <div class="guidance-item" style="border: none;">
+                <h3>🧠 Mental Health Resources</h3>
+                <p>Find professional support and helplines if your child is experiencing severe distress.</p>
+                <a href="#" style="color: var(--primary-color);">Find Support &rarr;</a>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+    // Search & Filter Logic
+    const searchInput = document.getElementById('searchInput');
+    const severityFilter = document.getElementById('severityFilter');
+    const alertsList = document.getElementById('alertsList');
+    const alerts = document.querySelectorAll('.alert-item');
+
+    function filterAlerts() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const severity = severityFilter.value;
+
+        alerts.forEach(alert => {
+            const text = alert.innerText.toLowerCase();
+            const alertSeverity = alert.dataset.severity;
+
+            const matchesSearch = text.includes(searchTerm);
+            const matchesSeverity = severity === 'all' || alertSeverity === severity;
+
+            if (matchesSearch && matchesSeverity) {
+                alert.style.display = 'block';
+            } else {
+                alert.style.display = 'none';
+            }
+        });
+    }
+
+    searchInput.addEventListener('input', filterAlerts);
+    severityFilter.addEventListener('change', filterAlerts);
+
+    // Download Report Mock Function
+    function downloadReport() {
+        const originalContent = document.body.innerHTML;
+        const printContent = document.querySelector('.alerts-list').outerHTML;
+
+        const w = window.open();
+        w.document.write(`
+            <html><head><title>CareCloud Report</title>
+            <style>
+                body { font-family: sans-serif; padding: 20px; }
+                .alert-item { border-bottom: 1px solid #ccc; padding: 10px 0; margin-bottom: 10px; }
+                .alert-header { font-weight: bold; margin-bottom: 5px; }
+            </style>
+            </head><body>
+            <h1>CareCloud Activity Report</h1>
+            <p>Generated on ${new Date().toLocaleString()}</p>
+            <hr>
+            ${printContent}
+            </body></html>
+        `);
+        w.print();
+        w.close();
+    }
+</script>
 {% endblock %}

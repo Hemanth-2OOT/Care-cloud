@@ -1,10 +1,9 @@
 import os
 import json
-import smtplib
 import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -55,8 +54,8 @@ if os.getenv('GOOGLE_CLOUD_PROJECT'):
 
 # Configure Secrets
 GENAI_API_KEY = get_secret('GEMINI_API_KEY')
-MAIL_USERNAME = get_secret('MAIL_USERNAME')
-MAIL_PASSWORD = get_secret('MAIL_PASSWORD')
+SENDGRID_API_KEY = get_secret('SENDGRID_API_KEY')
+SENDGRID_FROM_EMAIL = get_secret('SENDGRID_FROM_EMAIL') # e.g. alerts@carecloud.com
 
 # Configure Gemini AI
 if GENAI_API_KEY:
@@ -96,6 +95,7 @@ class Alert(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     toxicity_score = db.Column(db.Integer, nullable=False)
     severity_level = db.Column(db.String(50), nullable=False)
+    categories = db.Column(db.Text, nullable=True) # JSON string of categories
     explanation = db.Column(db.Text, nullable=False)
 
     # Relationship to access child details
@@ -215,61 +215,82 @@ def api_parent_alerts():
             'child_name': alert.child.name,
             'toxicity_score': alert.toxicity_score,
             'severity_level': alert.severity_level,
+            'categories': json.loads(alert.categories) if alert.categories else [],
             'explanation': alert.explanation
         })
 
     return jsonify({'alerts': alert_list})
 
+@app.route('/api/child/history', methods=['GET'])
+@login_required
+def api_child_history():
+    """
+    Returns recent alerts/checks for the child dashboard history.
+    """
+    if current_user.role != 'child':
+        return jsonify({'error': 'Unauthorized'}), 403
 
-def send_email_alert(parent_email, student_name, score, severity, explanation):
-    sender_email = MAIL_USERNAME
-    sender_password = MAIL_PASSWORD
+    alerts = Alert.query.filter_by(child_id=current_user.id).order_by(Alert.timestamp.desc()).limit(5).all()
+    history = []
+    for a in alerts:
+        history.append({
+            'timestamp': a.timestamp.strftime('%Y-%m-%d %H:%M'),
+            'severity': a.severity_level,
+            'categories': json.loads(a.categories) if a.categories else []
+        })
+    return jsonify({'history': history})
 
-    if not sender_email or not sender_password:
-        logging.warning("Email credentials not set. Skipping email alert.")
+
+def send_email_alert(parent_email, student_name, score, severity, categories, explanation):
+    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
+        logging.warning("SendGrid credentials not set. Skipping email alert.")
         return False
 
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = parent_email
-    msg['Subject'] = f"CareCloud: Gentle Check-in for {student_name}"
+    labels_str = ", ".join(categories) if categories else "Potential Harm"
 
-    body = f"""
-    Hello,
+    subject = f"CareCloud Report: Check-in needed for {student_name}"
 
-    We wanted to share a quick update regarding {student_name}'s recent activity on CareCloud.
-    Our system noticed some content that might be emotionally challenging or harmful.
+    html_content = f"""
+    <div style="font-family: sans-serif; color: #333; padding: 20px;">
+        <h2 style="color: #6366f1;">CareCloud Update 💜</h2>
+        <p>Hello,</p>
+        <p>We wanted to share a quick update regarding <strong>{student_name}</strong>'s recent activity on CareCloud.</p>
 
-    What we found:
-    - Category: {severity} impact
-    - Context: {explanation}
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0;">Analysis Report</h3>
+            <p><strong>Detected Labels:</strong> {labels_str}</p>
+            <p><strong>Severity:</strong> {severity}</p>
+            <p><strong>Reason:</strong> {explanation}</p>
+        </div>
 
-    (Note: To respect privacy and encourage trust, we do not include the raw text here.)
+        <p><em>Note: To respect privacy and encourage trust, we do not include the raw text here.</em></p>
 
-    Suggested Next Steps:
-    1. Approach {student_name} with curiosity and care.
-    2. Ask: "I noticed you might be dealing with something tough. Do you want to talk about it?"
-    3. Listen without judgment.
+        <h3>Supportive Recommendations:</h3>
+        <ul>
+            <li>Approach {student_name} with curiosity and care.</li>
+            <li>Ask: "I noticed you might be dealing with something tough. Do you want to talk about it?"</li>
+            <li>Listen without judgment.</li>
+        </ul>
 
-    Thank you for being a supportive part of {student_name}'s digital life.
-
-    Warmly,
-    The CareCloud Team 💜
+        <p>Thank you for being a supportive part of {student_name}'s digital life.</p>
+        <p>Warmly,<br>The CareCloud Team</p>
+    </div>
     """
-    msg.attach(MIMEText(body, 'plain'))
+
+    message = Mail(
+        from_email=SENDGRID_FROM_EMAIL,
+        to_emails=parent_email,
+        subject=subject,
+        html_content=html_content
+    )
 
     try:
-        # Connect to Gmail's SMTP server (or change for other providers)
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        text = msg.as_string()
-        server.sendmail(sender_email, parent_email, text)
-        server.quit()
-        print(f"Email sent to {parent_email}")
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        logging.info(f"Email sent to {parent_email}. Status Code: {response.status_code}")
         return True
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        logging.error(f"Failed to send email: {e}")
         return False
 
 @app.route('/analyze', methods=['POST'])
@@ -305,7 +326,8 @@ def analyze():
         Return a valid JSON object with the following fields:
         - toxicity_score: integer (0-100)
         - severity_level: string ("Low", "Medium", "High", "Critical")
-        - explanation: string (brief explanation of why it was flagged or not)
+        - categories: list of strings (e.g. ["Hate Speech", "Insult", "Threat", "Harassment"]) - empty list if none
+        - explanation: string (brief explanation of why it was flagged or not, explaining the labels)
         - victim_support_message: string (empathetic message for the user)
         - parent_alert_required: boolean (true if toxicity_score > 70)
 
@@ -335,10 +357,12 @@ def analyze():
         # Trigger email alert if needed
         if analysis_result.get('parent_alert_required', False):
             # Save Alert to Database
+            categories_json = json.dumps(analysis_result.get('categories', []))
             new_alert = Alert(
                 child_id=current_user.id,
                 toxicity_score=analysis_result['toxicity_score'],
                 severity_level=analysis_result['severity_level'],
+                categories=categories_json,
                 explanation=analysis_result['explanation']
             )
             db.session.add(new_alert)
@@ -350,6 +374,7 @@ def analyze():
                 current_user.name,
                 analysis_result['toxicity_score'],
                 analysis_result['severity_level'],
+                analysis_result.get('categories', []),
                 analysis_result['explanation']
             )
 

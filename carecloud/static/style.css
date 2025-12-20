@@ -453,6 +453,22 @@ body {
     font-size: 0.95rem;
 }
 
+.category-badge {
+    background-color: #fee2e2;
+    color: #991b1b;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+.history-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.history-item:last-child { border-bottom: none; }
+
 /* Ensure full width on mobile, spans bottom on desktop if needed,
    or we can adjust grid layout in HTML if we want side-by-side */
 @media (min-width: 768px) {

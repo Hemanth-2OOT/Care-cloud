@@ -1,0 +1,5 @@
+run = "python app.py"
+entrypoint = "app.py"
+
+[env]
+PYTHONPATH = "$PYTHONPATH:$PWD/carecloud"

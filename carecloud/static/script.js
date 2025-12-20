@@ -64,6 +64,15 @@ function updateUI(data) {
     explanationText.textContent = data.explanation;
     supportMessageText.textContent = data.victim_support_message;
 
+    // Render Categories
+    const categoriesDiv = document.getElementById('categoriesDiv');
+    if (data.categories && data.categories.length > 0) {
+        categoriesDiv.innerHTML = data.categories.map(cat => `<span class="category-badge">${cat}</span>`).join('');
+        categoriesDiv.style.display = 'flex';
+    } else {
+        categoriesDiv.style.display = 'none';
+    }
+
     // Update Classes for Colors
     scoreContainer.className = 'score-display'; // reset
     if (data.severity_level === 'Low') scoreContainer.classList.add('severity-low');
