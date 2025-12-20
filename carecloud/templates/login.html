@@ -49,6 +49,7 @@
                 <label for="parent_email">Parent/Guardian Email</label>
                 <input type="email" id="parent_email" name="parent_email" placeholder="parent@example.com">
                 <small>We'll notify them if we find something hurtful.</small>
+                <small id="email-match-error" style="color: var(--danger-color); display: none;">Parent email cannot be the same as your email.</small>
             </div>
 
             <script>
@@ -72,6 +73,32 @@
 
                     // Actually check the radio button (handled by label but good to ensure)
                     document.querySelector(`input[value="${role}"]`).checked = true;
+                }
+
+                // Client-side email validation
+                const emailInput = document.getElementById('email');
+                const parentEmailInput = document.getElementById('parent_email');
+                const submitBtn = document.querySelector('button[type="submit"]');
+                const errorMsg = document.getElementById('email-match-error');
+
+                function validateEmails() {
+                    if (parentEmailInput && emailInput.value && parentEmailInput.value) {
+                        if (emailInput.value.toLowerCase() === parentEmailInput.value.toLowerCase()) {
+                            errorMsg.style.display = 'block';
+                            submitBtn.disabled = true;
+                        } else {
+                            errorMsg.style.display = 'none';
+                            submitBtn.disabled = false;
+                        }
+                    } else {
+                        if (errorMsg) errorMsg.style.display = 'none';
+                        submitBtn.disabled = false;
+                    }
+                }
+
+                if (emailInput && parentEmailInput) {
+                    emailInput.addEventListener('input', validateEmails);
+                    parentEmailInput.addEventListener('input', validateEmails);
                 }
             </script>
             {% endif %}

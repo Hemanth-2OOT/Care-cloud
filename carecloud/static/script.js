@@ -64,6 +64,22 @@ function updateUI(data) {
     explanationText.textContent = data.explanation;
     supportMessageText.textContent = data.victim_support_message;
 
+    // Update Toxicity Meter
+    const meterFill = document.getElementById('toxicityMeterFill');
+    meterFill.style.width = `${data.toxicity_score}%`;
+
+    // Update Meter Colors & Classes
+    let severityColor = '#34d399'; // Default Safe
+
+    if (data.severity_level === 'Low') {
+        severityColor = '#34d399';
+    } else if (data.severity_level === 'Medium') {
+        severityColor = '#f59e0b';
+    } else if (data.severity_level === 'High' || data.severity_level === 'Critical') {
+        severityColor = '#ef4444';
+    }
+    meterFill.style.backgroundColor = severityColor;
+
     // Render Categories
     const categoriesDiv = document.getElementById('categoriesDiv');
     if (data.categories && data.categories.length > 0) {
@@ -73,12 +89,13 @@ function updateUI(data) {
         categoriesDiv.style.display = 'none';
     }
 
-    // Update Classes for Colors
-    scoreContainer.className = 'score-display'; // reset
-    if (data.severity_level === 'Low') scoreContainer.classList.add('severity-low');
-    else if (data.severity_level === 'Medium') scoreContainer.classList.add('severity-medium');
-    else if (data.severity_level === 'High') scoreContainer.classList.add('severity-high');
-    else if (data.severity_level === 'Critical') scoreContainer.classList.add('severity-critical');
+    // Show Next Steps if Harmful
+    const nextSteps = document.getElementById('nextSteps');
+    if (data.toxicity_score > 30) {
+        nextSteps.style.display = 'block';
+    } else {
+        nextSteps.style.display = 'none';
+    }
 
     // Alert Info
     if (data.parent_alert_required) {

@@ -127,9 +127,13 @@ def signup():
             flash('Please select a role (Child or Parent).')
             return redirect(url_for('signup'))
 
-        if role == 'child' and not parent_email:
-            flash('Parent email is required for child accounts.')
-            return redirect(url_for('signup'))
+        if role == 'child':
+            if not parent_email:
+                flash('Parent email is required for child accounts.')
+                return redirect(url_for('signup'))
+            if email.strip().lower() == parent_email.strip().lower():
+                flash('Child email and Parent email must be different.')
+                return redirect(url_for('signup'))
 
         user = User.query.filter_by(email=email).first()
         if user:

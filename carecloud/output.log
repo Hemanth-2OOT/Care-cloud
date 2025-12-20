@@ -12,9 +12,5 @@ WARNING:root:GEMINI_API_KEY not found. AI features will run in mock mode.
  * Debug mode: on
 Address already in use
 Port 5000 is in use by another program. Either identify and stop that program, or start the server with a different port.
-INFO:werkzeug:127.0.0.1 - - [20/Dec/2025 16:10:44] "[32mPOST /signup HTTP/1.1[0m" 302 -
-INFO:werkzeug:127.0.0.1 - - [20/Dec/2025 16:11:22] "[32mPOST /login HTTP/1.1[0m" 302 -
-/app/carecloud/app.py:106: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
-  return User.query.get(int(user_id))
-INFO:werkzeug:127.0.0.1 - - [20/Dec/2025 16:11:44] "POST /analyze HTTP/1.1" 200 -
-INFO:werkzeug:127.0.0.1 - - [20/Dec/2025 16:12:06] "GET /api/child/history HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [20/Dec/2025 19:27:46] "[32mPOST /signup HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [20/Dec/2025 19:27:54] "[32mPOST /signup HTTP/1.1[0m" 302 -

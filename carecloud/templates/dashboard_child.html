@@ -41,12 +41,23 @@
         </div>
 
         <div id="results" class="results-section">
-            <div class="score-display" id="scoreContainer">
-                <div class="score-circle">
-                    <span class="score-value" id="scoreValue" style="display:none;">0</span>
-                    <span class="score-label" id="severityLabel">Safe</span>
+            <!-- Toxicity Meter -->
+            <div class="toxicity-meter-container" style="margin-bottom: 2rem; padding: 0 1rem;">
+                <div class="meter-labels" style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; color: var(--text-secondary);">
+                    <span>Safe</span>
+                    <span>Moderate</span>
+                    <span>High</span>
+                </div>
+                <div class="meter-bar" style="height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; position: relative;">
+                    <div id="toxicityMeterFill" style="width: 0%; height: 100%; background: var(--safe-color); transition: width 0.5s ease, background-color 0.5s ease;"></div>
+                </div>
+                <div style="text-align: center; margin-top: 0.5rem;">
+                    <span id="severityLabel" style="font-weight: 700; color: var(--text-primary);">Safe</span>
                 </div>
             </div>
+
+            <!-- Removed old circle score -->
+            <span class="score-value" id="scoreValue" style="display:none;">0</span>
 
             <div id="categoriesDiv" class="categories-container" style="display:none; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                 <!-- Badges will be injected here -->
@@ -58,8 +69,17 @@
             </div>
 
             <div class="result-card support-message" id="supportMessageContainer">
-                <h3>CareCloud says:</h3>
+                <h3>CareCloud Support 💜</h3>
                 <p id="supportMessageText">You're doing great! Keep spreading positivity.</p>
+
+                <div id="nextSteps" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.05); display: none;">
+                    <h4 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--primary-color);">Here's what you can do:</h4>
+                    <ul style="padding-left: 1.5rem; color: var(--text-primary);">
+                        <li>Take a moment to breathe and step away from the screen. 🌬️</li>
+                        <li>Talk to your parent or a trusted adult about what happened. 🗣️</li>
+                        <li>Remember, your safety comes first.</li>
+                    </ul>
+                </div>
             </div>
 
             <!-- Gentle Alert Info -->
