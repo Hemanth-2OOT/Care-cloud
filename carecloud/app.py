@@ -283,15 +283,34 @@ def analyze():
             if first != -1 and last != -1 and last > first:
                 response_text = response_text[first:last+1]
             
-            analysis_result = json.loads(response_text)
-            
-            # Add fallback if support_panel_content is missing
-            if 'support_panel_content' not in analysis_result:
-                analysis_result['support_panel_content'] = {
-                    "context_summary": f"Analysis complete (Score: {analysis_result.get('toxicity_score', 0)})",
-                    "student_guidance": analysis_result.get('victim_support_message', 'Stay safe online.'),
-                    "parent_guidance": "Monitor activity and discuss safety.",
-                    "next_steps": analysis_result.get('safe_response_steps', ["Step 1: Stay calm", "Step 2: Ask for help", "Step 3: Block if needed"])[:3]
+            try:
+                analysis_result = json.loads(response_text)
+                
+                # Add fallback if support_panel_content is missing
+                if 'support_panel_content' not in analysis_result:
+                    analysis_result['support_panel_content'] = {
+                        "context_summary": f"Analysis complete (Score: {analysis_result.get('toxicity_score', 0)})",
+                        "student_guidance": analysis_result.get('victim_support_message', 'Stay safe online.'),
+                        "parent_guidance": "Monitor activity and discuss safety.",
+                        "next_steps": analysis_result.get('safe_response_steps', ["Step 1: Stay calm", "Step 2: Ask for help", "Step 3: Block if needed"])[:3]
+                    }
+            except json.JSONDecodeError as je:
+                print(f"Failed to parse model output as JSON: {je}")
+                # Try to build a fallback object if JSON parsing fails
+                analysis_result = {
+                    "toxicity_score": 0,
+                    "severity_level": "Low",
+                    "explanation": "Could not parse detailed analysis.",
+                    "victim_support_message": "Stay safe!",
+                    "safe_response_steps": ["Check your connection", "Try again", "Stay safe"],
+                    "detected_labels": {},
+                    "parent_alert_required": false,
+                    "support_panel_content": {
+                        "context_summary": "Analysis error",
+                        "student_guidance": "Something went wrong during analysis.",
+                        "parent_guidance": "Please try again later.",
+                        "next_steps": ["Retry", "Contact support", "Wait"]
+                    }
                 }
         except Exception as ai_err:
             print(f"AI Generation Error: {ai_err}")

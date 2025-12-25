@@ -464,8 +464,8 @@ body {
 .risk-bar {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, var(--safe-color), var(--risk-color));
-    transition: width 0.6s ease;
+    background: var(--safe-color);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.6s ease;
     border-radius: 4px;
 }
 
