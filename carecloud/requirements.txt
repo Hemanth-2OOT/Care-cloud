@@ -4,7 +4,7 @@ Flask-Login
 google-generativeai
 werkzeug
 python-dotenv
-Pillow
-pytesseract
+# Pillow
+# pytesseract
 gunicorn
 flask-sqlalchemy
