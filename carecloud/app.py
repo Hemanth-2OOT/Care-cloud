@@ -22,7 +22,9 @@ import google.generativeai as genai
 # APP + DB SETUP
 # =========================
 app = Flask(__name__)
-
+@app.route("/health")
+def health():
+    return "CareCloud is running", 200
 app.config["SECRET_KEY"] = os.getenv(
     "SECRET_KEY", "carecloud-secret-key-change-this"
 )
