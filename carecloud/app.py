@@ -399,13 +399,39 @@ def analyze():
         gemini_data.get("risk_score", 0)
     )
 
-    severity = gemini_data.get("severity_level")
-    if not severity:
-        severity = (
-            "High" if final_score >= 70
-            else "Medium" if final_score >= 40
-            else "Low"
-        )
+    # ---------------------------------------------------------
+    # CRITICAL SAFETY CONSISTENCY CHECK
+    # ---------------------------------------------------------
+    detected = gemini_data.get("detected_labels", {})
+    any_harmful = any(detected.values())
+
+    # 1. High Score MUST have a label
+    if final_score >= 40 and not any_harmful:
+        detected["harassment"] = True  # Fallback for unexplained high risk
+        gemini_data["why_harmful"] = "Content flagged as high risk by safety filters."
+
+    # 2. Severe Labels MUST have High Score
+    severe_labels = ["sexual_content", "grooming", "violence", "self_harm_risk"]
+    if any(detected.get(l) for l in severe_labels):
+        if final_score < 70:
+            final_score = 70
+
+    # 3. Strict Severity Recalculation
+    if final_score >= 90:
+        severity = "Critical"
+    elif final_score >= 70:
+        severity = "High"
+    elif final_score >= 40:
+        severity = "Medium"
+    else:
+        severity = "Low"
+
+    # 4. Explanation Consistency
+    if final_score >= 40 and "safe" in gemini_data.get("why_harmful", "").lower():
+        gemini_data["why_harmful"] = "Potential harm detected based on analysis scores."
+
+    gemini_data["detected_labels"] = detected
+    # ---------------------------------------------------------
 
     if final_score >= 80:
         send_parent_alert(
