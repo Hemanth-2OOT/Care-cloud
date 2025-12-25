@@ -4,181 +4,182 @@
 {% block content %}
 <div class="agent-container">
 
-    <!-- HEADER -->
-    <div class="agent-status-header">
-        <div class="status-left">
-            <div class="agent-indicator active"></div>
+  <!-- HEADER -->
+  <div class="agent-status-header">
+    <div class="status-left">
+      <div class="agent-indicator active"></div>
+      <div>
+        <h1>CareCloud Safety Agent</h1>
+        <p class="status-label">Protecting you in real time</p>
+      </div>
+    </div>
+
+    <!-- SAFE USER FALLBACK -->
+    <div class="user-info">
+      <span class="user-name">
+        {{ user.name if user is defined and user.name else 'User' }}
+      </span>
+    </div>
+  </div>
+
+  <div class="dashboard-layout">
+
+    <!-- LEFT -->
+    <div class="action-card">
+
+      <!-- GAUGE -->
+      <div class="meter-container">
+        <div class="gauge-wrapper">
+          <div class="gauge-background"></div>
+          <div class="gauge-needle" id="gaugeNeedle"></div>
+          <div class="gauge-center"></div>
+        </div>
+        <div class="gauge-labels">
+          <span>Safe</span>
+          <span>Moderate</span>
+          <span>High Risk</span>
+        </div>
+      </div>
+
+      <h2>Analyze Content</h2>
+      <p class="card-subtitle">
+        Paste any message or upload a screenshot. CareCloud will protect you.
+      </p>
+
+      <form id="analyzeForm" enctype="multipart/form-data">
+        <label>Text / Message</label>
+        <textarea
+          name="text"
+          id="text_content"
+          placeholder="Paste messages, comments, or anything that feels uncomfortable…"
+          rows="6"
+        ></textarea>
+
+        <label>Screenshot (optional)</label>
+        <input type="file" name="image" accept="image/*">
+
+        <button type="submit" class="btn-analyze">Analyze Now</button>
+      </form>
+
+      <!-- STATES -->
+      <div id="stateContainer">
+        <div id="analyzingState" style="display:none">
+          <div class="agent-spinner"></div>
+          <p>Analyzing safely…</p>
+        </div>
+
+        <div id="safeState" style="display:none" class="safe-state">
+          ✅ Content appears safe
+        </div>
+
+        <div id="riskState" style="display:none" class="risk-state">
+          ⚠ Potential harm detected
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="results-panel">
+
+      <div id="resultsEmpty">
+        <p>Your analysis results will appear here</p>
+      </div>
+
+      <div id="resultsContent" style="display:none">
+
+        <!-- SCORE -->
+        <div class="risk-section">
+          <div class="risk-meter">
+            <div class="risk-bar" id="riskBar"></div>
+          </div>
+          <div class="risk-labels">
+            <span id="riskScore">0%</span>
+            <span id="riskStatus">Safe</span>
+          </div>
+        </div>
+
+        <!-- LABELS -->
+        <div class="detections-section">
+          <h3>What was detected</h3>
+          <div id="labelsContainer" class="labels-minimal"></div>
+        </div>
+
+        <!-- EXPLANATION -->
+        <div class="analysis-summary">
+          <h3>Why this content may be harmful</h3>
+          <p id="explanationText">—</p>
+        </div>
+
+        <!-- SUPPORT -->
+        <div id="victimSupportSection" class="victim-support-section">
+          <h3>💙 Support for You</h3>
+          <p id="victimSupportText">—</p>
+        </div>
+
+        <!-- STEPS -->
+        <div id="safeResponsesSection" class="safe-responses-section">
+          <h3>What you can do now</h3>
+          <ul id="safeResponsesList"></ul>
+        </div>
+
+        <!-- ALERT -->
+        <div id="alertInfo" class="alert-notification" style="display:none">
+          ⚠ A parent or guardian has been notified for safety
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="agent-insights">
+        <h4>Recent Insights</h4>
+
+        {% if history is defined and history %}
+          {% for item in history %}
+          <div class="history-item">
             <div>
-                <h1>CareCloud Safety Agent</h1>
-                <p class="status-label">Protecting you in real time</p>
+              <strong>{{ item.content_preview }}</strong>
+              <div class="history-meta">
+                {{ item.timestamp.strftime('%H:%M') if item.timestamp else '' }}
+                <span class="severity-{{ item.severity_level|lower }}">
+                  {{ item.severity_level }}
+                </span>
+              </div>
             </div>
-        </div>
-        <div class="user-info">
-            <span class="user-name">{{ user.name }}</span>
-        </div>
+            <div>{{ item.toxicity_score }}%</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted">No previous analysis</p>
+        {% endif %}
+      </div>
+
     </div>
+  </div>
 
-    <div class="dashboard-layout">
+  <!-- SUPPORT PANEL -->
+  <div class="support-panel">
+    <h3>🛡 Safety Reminder</h3>
+    <p>
+      You deserve to feel safe online. If something feels wrong,
+      trust your instincts and reach out for help.
+    </p>
 
-        <!-- LEFT: ANALYSIS -->
-        <div class="action-card">
-
-            <!-- GAUGE -->
-            <div class="meter-container">
-                <div class="gauge-wrapper">
-                    <div class="gauge-background"></div>
-                    <div class="gauge-needle" id="gaugeNeedle"></div>
-                    <div class="gauge-center"></div>
-                </div>
-                <div class="gauge-labels">
-                    <span>Safe</span>
-                    <span>Moderate</span>
-                    <span>High Risk</span>
-                </div>
-            </div>
-
-            <h2>Analyze Content</h2>
-            <p class="card-subtitle">
-                Paste any message or upload a screenshot. CareCloud will protect you.
-            </p>
-
-            <form id="analyzeForm" enctype="multipart/form-data">
-                <label>Text / Message</label>
-                <textarea
-                    name="text"
-                    id="text_content"
-                    placeholder="Paste messages, comments, or anything that feels uncomfortable..."
-                    rows="6"
-                ></textarea>
-
-                <label>Screenshot (optional)</label>
-                <input type="file" name="image" accept="image/*">
-
-                <button type="submit" class="btn-analyze">Analyze Now</button>
-            </form>
-
-            <!-- STATES -->
-            <div id="stateContainer">
-                <div id="analyzingState" style="display:none">
-                    <div class="agent-spinner"></div>
-                    <p>Analyzing safely...</p>
-                </div>
-
-                <div id="safeState" style="display:none" class="safe-state">
-                    ✅ Content appears safe
-                </div>
-
-                <div id="riskState" style="display:none" class="risk-state">
-                    ⚠ Potential harm detected
-                </div>
-            </div>
-        </div>
-
-        <!-- RIGHT: RESULTS -->
-        <div class="results-panel">
-
-            <div id="resultsEmpty">
-                <p>Your analysis results will appear here</p>
-            </div>
-
-            <div id="resultsContent" style="display:none">
-
-                <!-- SCORE -->
-                <div class="risk-section">
-                    <div class="risk-meter">
-                        <div class="risk-bar" id="riskBar"></div>
-                    </div>
-                    <div class="risk-labels">
-                        <span id="riskScore">0%</span>
-                        <span id="riskStatus">Safe</span>
-                    </div>
-                </div>
-
-                <!-- LABELS -->
-                <div class="detections-section">
-                    <h3>What was detected</h3>
-                    <div id="labelsContainer" class="labels-minimal"></div>
-                </div>
-
-                <!-- WHY HARMFUL -->
-                <div class="analysis-summary">
-                    <h3>Why this content is harmful</h3>
-                    <p id="explanationText">
-                        —
-                    </p>
-                </div>
-
-                <!-- SUPPORT -->
-                <div id="victimSupportSection" class="victim-support-section">
-                    <h3>💙 Support for You</h3>
-                    <p id="victimSupportText">
-                        —
-                    </p>
-                </div>
-
-                <!-- STEPS -->
-                <div id="safeResponsesSection" class="safe-responses-section">
-                    <h3>What you can do now</h3>
-                    <ul id="safeResponsesList"></ul>
-                </div>
-
-                <!-- PARENT ALERT -->
-                <div id="alertInfo" class="alert-notification" style="display:none">
-                    ⚠ A parent or guardian has been notified for safety
-                </div>
-            </div>
-
-            <!-- HISTORY -->
-            <div class="agent-insights">
-                <h4>Recent Insights</h4>
-
-                {% if history %}
-                    {% for item in history %}
-                    <div class="history-item">
-                        <div>
-                            <strong>{{ item.content_preview }}</strong>
-                            <div class="history-meta">
-                                {{ item.timestamp.strftime('%H:%M') }}
-                                <span class="severity-{{ item.severity_level.lower() }}">
-                                    {{ item.severity_level }}
-                                </span>
-                            </div>
-                        </div>
-                        <div>{{ item.toxicity_score }}%</div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <p class="text-muted">No previous analysis</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- SUPPORT PANEL -->
-    <div class="support-panel">
-        <h3>🛡 Safety Reminder</h3>
+    <div class="support-columns">
+      <div>
+        <h4>For Students</h4>
         <p>
-            You deserve to feel safe online. If something feels wrong,
-            trust your feelings and talk to someone you trust.
+          Checking this message was a strong choice.
+          You can mute, block, report, or take a break.
         </p>
-
-        <div class="support-columns">
-            <div>
-                <h4>For Students</h4>
-                <p>
-                    You did the right thing by checking this message.
-                    It's okay to block, report, or step away.
-                </p>
-            </div>
-            <div>
-                <h4>For Parents</h4>
-                <p>
-                    Use this insight to guide calm, supportive conversations —
-                    not punishment.
-                </p>
-            </div>
-        </div>
+      </div>
+      <div>
+        <h4>For Parents</h4>
+        <p>
+          These insights help start calm, supportive conversations —
+          not punishment.
+        </p>
+      </div>
     </div>
+  </div>
 
 </div>
 
