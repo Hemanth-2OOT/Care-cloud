@@ -17,12 +17,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import google.generativeai as genai
 
 # =========================
-# APP + DB SETUP
+# APP SETUP
 # =========================
 app = Flask(__name__)
+
 @app.route("/health")
 def health():
     return "CareCloud is running", 200
+
 app.config["SECRET_KEY"] = os.getenv(
     "SECRET_KEY", "carecloud-secret-key-change-this"
 )
@@ -190,22 +192,25 @@ Labels: {labels}
         return False
 
 # =========================
-# ANALYZE ROUTE
+# ANALYZE ROUTE (FIXED)
 # =========================
 @app.route("/analyze", methods=["POST"])
 @login_required
 def analyze():
     text = request.form.get("text", "")
     image = request.files.get("image")
+
     ocr_text = ""
 
-if image:
-    try:
-        from PIL import Image
-        import pytesseract
+    if image:
+        try:
+            from PIL import Image
+            import pytesseract
 
-        img = Image.open(image.stream).convert("RGB")
-        ocr_text = pytesseract.image_to_string(img).strip()
+            img = Image.open(image.stream).convert("RGB")
+            ocr_text = pytesseract.image_to_string(img).strip()
+        except Exception:
+            ocr_text = ""
 
     prompt = f"""
 Return ONLY valid JSON.
@@ -216,29 +221,30 @@ Text:
 OCR:
 {ocr_text}
 
-Keys:
-toxicity_score (0-100),
+Required keys:
+toxicity_score,
 severity_level,
 explanation,
 victim_support_message,
-safe_response_steps (array),
-detected_labels (object),
-parent_alert_required (true/false)
+safe_response_steps,
+detected_labels,
+parent_alert_required
 """
 
     try:
         response = model.generate_content(prompt)
         raw = response.text.strip()
 
-        start, end = raw.find("{"), raw.rfind("}")
-        analysis = json.loads(raw[start:end + 1])
+        start = raw.find("{")
+        end = raw.rfind("}")
+        analysis = json.loads(raw[start:end+1])
 
     except Exception:
         analysis = {
             "toxicity_score": 0,
             "severity_level": "Low",
             "explanation": "Analysis failed",
-            "victim_support_message": "Stay safe.",
+            "victim_support_message": "Stay safe",
             "safe_response_steps": [],
             "detected_labels": {},
             "parent_alert_required": False,
@@ -246,25 +252,25 @@ parent_alert_required (true/false)
 
     record = Analysis(
         user_id=current_user.id,
-        toxicity_score=analysis["toxicity_score"],
-        severity_level=analysis["severity_level"],
-        explanation=analysis["explanation"],
-        victim_support_message=analysis["victim_support_message"],
-        safe_response_steps=json.dumps(analysis["safe_response_steps"]),
-        labels=json.dumps(analysis["detected_labels"]),
+        toxicity_score=analysis.get("toxicity_score", 0),
+        severity_level=analysis.get("severity_level", "Low"),
+        explanation=analysis.get("explanation", ""),
+        victim_support_message=analysis.get("victim_support_message", ""),
+        safe_response_steps=json.dumps(analysis.get("safe_response_steps", [])),
+        labels=json.dumps(analysis.get("detected_labels", {})),
         content_preview=text[:100],
     )
 
     db.session.add(record)
     db.session.commit()
 
-    if analysis["parent_alert_required"]:
+    if analysis.get("parent_alert_required"):
         send_email_alert(
             current_user.parent_email,
             current_user.name,
-            analysis["toxicity_score"],
-            analysis["severity_level"],
-            analysis["detected_labels"],
+            analysis.get("toxicity_score"),
+            analysis.get("severity_level"),
+            analysis.get("detected_labels"),
         )
 
     return jsonify(analysis)
