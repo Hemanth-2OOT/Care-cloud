@@ -3,28 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CareCloud – {% block title %}{% endblock %}</title>
+    <title>CareCloud • {% block title %}{% endblock %}</title>
 
-    <!-- Main Styles -->
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Main CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-    <!-- Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== GLOBAL RESET ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top, #0f172a, #020617);
+            color: #e5e7eb;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        /* ===== LAYOUT ===== */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: auto;
+            padding: 0 1rem;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem 0;
+        }
+
+        /* ===== NAVBAR ===== */
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(2, 6, 23, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #38bdf8;
+        }
+
+        .nav-user {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .welcome-text {
+            font-size: 0.95rem;
+            color: #cbd5f5;
+        }
+
+        .btn-logout {
+            padding: 0.4rem 0.9rem;
+            font-size: 0.85rem;
+            border-radius: 999px;
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* ===== FLASH MESSAGES ===== */
+        .flash-messages {
+            margin-bottom: 1.5rem;
+        }
+
+        .flash-message {
+            background: rgba(56, 189, 248, 0.12);
+            border-left: 4px solid #38bdf8;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: #e0f2fe;
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            padding: 1.5rem 0;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            background: rgba(2, 6, 23, 0.6);
+        }
+
+        .footer span {
+            color: #38bdf8;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 640px) {
+            .welcome-text {
+                display: none;
+            }
+        }
+    </style>
 </head>
 
 <body>
 
-    <!-- 🌐 NAVBAR -->
+    <!-- 🔷 NAVBAR -->
     <nav class="navbar">
         <div class="container nav-inner">
             <a href="/" class="logo">
-                ☁️ <span>CareCloud</span>
+                ☁️ CareCloud
             </a>
 
             {% if user %}
             <div class="nav-user">
                 <span class="welcome-text">
-                    Hi, <strong>{{ user.name }}</strong>
+                    Hello, <strong>{{ user.name }}</strong>
                 </span>
                 <a href="/logout" class="btn-logout">Logout</a>
             </div>
@@ -32,17 +155,13 @@
         </div>
     </nav>
 
-    <!-- 📦 MAIN CONTENT -->
+    <!-- 🔷 MAIN CONTENT -->
     <main class="container main-content">
-
-        <!-- 🔔 FLASH MESSAGES -->
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 <div class="flash-messages">
                     {% for message in messages %}
-                        <div class="flash-message">
-                            {{ message }}
-                        </div>
+                        <div class="flash-message">{{ message }}</div>
                     {% endfor %}
                 </div>
             {% endif %}
@@ -51,10 +170,10 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- 🧡 FOOTER -->
+    <!-- 🔷 FOOTER -->
     <footer class="footer">
         <p>
-            💙 CareCloud — protecting emotional well-being and online safety.
+            💙 <span>CareCloud</span> — protecting children from harmful online experiences.
         </p>
     </footer>
 
