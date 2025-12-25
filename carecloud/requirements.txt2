@@ -1,7 +1,0 @@
-flask
-flask-login
-flask-sqlalchemy
-werkzeug
-google-generativeai
-python-dotenv
-gunicorn
