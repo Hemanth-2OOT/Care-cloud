@@ -3,51 +3,58 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import (
+    LoginManager, UserMixin,
+    login_user, login_required,
+    logout_user, current_user
+)
 from werkzeug.security import generate_password_hash, check_password_hash
-import PIL.Image
-from dotenv import load_dotenv
-import pytesseract
 
-# Load environment variables
+import PIL.Image
+import pytesseract
+from dotenv import load_dotenv
+
+# =========================
+# ENV + BASIC SETUP
+# =========================
 load_dotenv()
 
-# Configure Gemini AI
-import google.generativeai as genai
-from google.genai import types
-
-# Use Replit integration env vars
-api_key = os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
-base_url = os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL")
-
-# This is using Replit's AI Integrations service
-client = genai.Client(
-    api_key=api_key,
-    http_options={
-        'api_version': '',
-        'base_url': base_url
-    }
-)
-
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this-in-prod')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'  # type: ignore
+login_manager.login_view = 'login'
 
-# --- Models ---
+# =========================
+# GEMINI (OFFICIAL SDK)
+# =========================
+import google.generativeai as genai
+
+GEMINI_API_KEY = os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("AI_INTEGRATIONS_GEMINI_API_KEY is not set")
+
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-2.5-flash")
+
+# =========================
+# DATABASE MODELS
+# =========================
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     parent_email = db.Column(db.String(100), nullable=False)
+
     analyses = db.relationship('Analysis', backref='user', lazy=True)
 
     def set_password(self, password):
@@ -55,6 +62,7 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
 
 class Analysis(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -64,57 +72,51 @@ class Analysis(db.Model):
     severity_level = db.Column(db.String(20))
     explanation = db.Column(db.Text)
     victim_support_message = db.Column(db.Text)
-    safe_response_steps = db.Column(db.Text) # JSON string
-    labels = db.Column(db.Text) # JSON string
+    safe_response_steps = db.Column(db.Text)
+    labels = db.Column(db.Text)
     content_preview = db.Column(db.Text)
 
-    def __init__(self, **kwargs):
-        super(Analysis, self).__init__(**kwargs)
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- Routes ---
-
+# =========================
+# ROUTES
+# =========================
 @app.route('/')
 def index():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    return redirect(url_for('dashboard')) if current_user.is_authenticated else redirect(url_for('login'))
+
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        name = request.form.get('name')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        parent_email = request.form.get('parent_email')
-
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter_by(email=request.form['email']).first()
         if user:
             flash('Email already exists')
             return redirect(url_for('signup'))
 
-        new_user = User(name=name, email=email, parent_email=parent_email)  # type: ignore
-        new_user.set_password(password)
+        new_user = User(
+            name=request.form['name'],
+            email=request.form['email'],
+            parent_email=request.form['parent_email']
+        )
+        new_user.set_password(request.form['password'])
         db.session.add(new_user)
         db.session.commit()
-
         login_user(new_user)
         return redirect(url_for('dashboard'))
 
     return render_template('login.html', mode='signup')
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-
-        user = User.query.filter_by(email=email).first()
-        if not user or not user.check_password(password):
-            flash('Please check your login details and try again.')
+        user = User.query.filter_by(email=request.form['email']).first()
+        if not user or not user.check_password(request.form['password']):
+            flash('Invalid credentials')
             return redirect(url_for('login'))
 
         login_user(user)
@@ -122,239 +124,143 @@ def login():
 
     return render_template('login.html', mode='login')
 
+
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
 
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    history = Analysis.query.filter_by(user_id=current_user.id).order_by(Analysis.timestamp.desc()).all()
-    # Process history for template
+    history = Analysis.query.filter_by(user_id=current_user.id).order_by(
+        Analysis.timestamp.desc()
+    ).all()
+
     for h in history:
-        h.labels_list = json.loads(h.labels) if h.labels else {}
-        h.steps = json.loads(h.safe_response_steps) if h.safe_response_steps else []
+        h.labels_list = json.loads(h.labels or "{}")
+        h.steps = json.loads(h.safe_response_steps or "[]")
+
     return render_template('dashboard.html', user=current_user, history=history)
 
-def send_email_alert(parent_email, student_name, score, severity, labels=None):
-    """Send detailed email alert to parent with comprehensive analysis labels."""
-    sender_email = os.getenv('MAIL_USERNAME')
-    sender_password = os.getenv('MAIL_PASSWORD')
-
-    if not sender_email or not sender_password:
-        print("⚠️ Email credentials not configured. Alert saved but email not sent.")
-        print(f"   To enable: Set MAIL_USERNAME and MAIL_PASSWORD environment variables")
+# =========================
+# EMAIL ALERT
+# =========================
+def send_email_alert(parent_email, student_name, score, severity, labels):
+    sender = os.getenv('MAIL_USERNAME')
+    password = os.getenv('MAIL_PASSWORD')
+    if not sender or not password:
         return False
 
-    # Prepare labels for email
-    detected_issues = []
-    if labels:
-        if labels.get('harassment'): detected_issues.append('🚨 Harassment/Bullying')
-        if labels.get('hate_speech'): detected_issues.append('⚠️ Hate Speech')
-        if labels.get('threats'): detected_issues.append('🔴 Threats')
-        if labels.get('sexual_content'): detected_issues.append('🔒 Inappropriate Content')
-        if labels.get('emotional_abuse'): detected_issues.append('💔 Emotional Abuse')
-        if labels.get('cyberbullying'): detected_issues.append('📱 Cyberbullying')
-
-    issues_text = '\n'.join([f"  {issue}" for issue in detected_issues]) if detected_issues else "  Toxicity detected"
-
-    msg = MIMEMultipart('alternative')
-    msg['From'] = sender_email
+    msg = MIMEMultipart()
+    msg['From'] = sender
     msg['To'] = parent_email
-    msg['Subject'] = f"🚨 CareCloud Alert – Support Needed for {student_name}"
+    msg['Subject'] = f"CareCloud Alert for {student_name}"
 
-    # HTML email with proper formatting (no raw content)
     body = f"""
-Dear Parent/Guardian,
+Detected harmful content.
 
-We're reaching out because CareCloud detected potentially harmful content exposure on {student_name}'s account.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 ANALYSIS SUMMARY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Detected Issues:
-{issues_text}
-
-Severity Level: {severity} ({score}/100)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 HOW YOU CAN HELP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✓ Have a calm, supportive conversation
-✓ Listen without judgment
-✓ Reassure them it's not their fault
-✓ Consider professional counseling if needed
-✓ Monitor their online activity going forward
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📌 IMPORTANT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CareCloud uses AI to PROTECT, not punish.
-We never share raw messages - only analysis labels.
-Your child is safe, and we're here to help.
-
-Best regards,
-The CareCloud Team
-Support: carecloud@example.com
-    """
+Severity: {severity}
+Score: {score}/100
+Labels: {labels}
+"""
     msg.attach(MIMEText(body, 'plain'))
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login(sender_email, sender_password)
-        text = msg.as_string()
-        server.sendmail(sender_email, parent_email, text)
+        server.login(sender, password)
+        server.sendmail(sender, parent_email, msg.as_string())
         server.quit()
-        print(f"✅ Email alert sent to {parent_email}")
         return True
-    except Exception as e:
-        print(f"❌ Failed to send email: {e}")
+    except Exception:
         return False
 
+# =========================
+# ANALYZE ROUTE
+# =========================
 @app.route('/analyze', methods=['POST'])
 @login_required
 def analyze():
-    # Expecting 'text' in form and 'image' in files (script.js uses these keys)
-    text_content = request.form.get('text', '')
-    image_file = request.files.get('image')
+    text = request.form.get('text', '')
+    image = request.files.get('image')
 
-    if not text_content and not image_file:
-        return jsonify({'error': 'No text content or image provided'}), 400
+    ocr_text = ''
+    if image:
+        img = PIL.Image.open(image.stream)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        ocr_text = pytesseract.image_to_string(img).strip()
+
+    prompt = f"""
+Return ONLY valid JSON.
+
+Text:
+{text}
+
+OCR:
+{ocr_text}
+
+Required keys:
+toxicity_score, severity_level, explanation,
+victim_support_message, safe_response_steps,
+detected_labels, parent_alert_required
+"""
 
     try:
-        # OCR step (if an image was uploaded)
-        ocr_text = ''
-        if image_file:
-            try:
-                img = PIL.Image.open(image_file.stream)  # type: ignore
-                # Optional: convert to RGB for some images
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                ocr_text = pytesseract.image_to_string(img)
-                ocr_text = ocr_text.strip()
-            except Exception as e:
-                print(f"Failed to process image for OCR: {e}")
-                ocr_text = ''
+        response = model.generate_content(prompt)
+        response_text = response.text.strip()
 
-        prompt_text = """
-        You are CareCloud Safety Agent. Analyze content for harmful patterns. Return ONLY valid JSON (no markdown, no extra text).
-        
-        CRITICAL: Always include ALL these sections. Never omit any:
-        - toxicity_score: 0-100 integer
-        - severity_level: "Low" (0-30), "Medium" (31-60), "High" (61-85), or "Critical" (86-100)
-        - explanation: Clear explanation of WHAT harmful content was found and WHY it is harmful. Use simple language.
-        - victim_support_message: Empathetic, non-judgmental reassurance. Address the user directly.
-        - safe_response_steps: Array of 3 step-by-step instructions on how to respond safely, specific to the content found.
-        - detected_labels: Object with BOOLEAN values (true/false) for: harassment, hate_speech, threats, sexual_content, emotional_abuse, cyberbullying
-        - parent_alert_required: true if toxicity_score > 70, false otherwise
-        - support_panel_content: Object containing:
-            - context_summary: String explaining what was detected (e.g., "We found patterns of harassment in your text input")
-            - student_guidance: Specific advice for the student based on the detection
-            - parent_guidance: Specific advice for parents based on the detection
-            - next_steps: Array of 3 recommended actions or resources
-        """
+        first, last = response_text.find('{'), response_text.rfind('}')
+        if first != -1 and last != -1:
+            response_text = response_text[first:last+1]
 
-        # Build content for Gemini
-        content = [prompt_text]
-        if text_content:
-            content.append(f"Text Input: {text_content}")
-        if ocr_text:
-            content.append(f"OCR Extracted Text: {ocr_text}")
+        analysis = json.loads(response_text)
 
-        # Call Gemini AI
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=' '.join(content)
-            )
-            if not response or not hasattr(response, 'text') or not response.text:
-                 raise Exception("AI response empty or invalid.")
-            response_text = response.text.strip()
-            
-            # Try to extract JSON substring in case the model added commentary
-            first = response_text.find('{')
-            last = response_text.rfind('}')
-            if first != -1 and last != -1 and last > first:
-                response_text = response_text[first:last+1]
-            
-            try:
-                analysis_result = json.loads(response_text)
-                
-                # Add fallback if support_panel_content is missing
-                if 'support_panel_content' not in analysis_result:
-                    analysis_result['support_panel_content'] = {
-                        "context_summary": f"Analysis complete (Score: {analysis_result.get('toxicity_score', 0)})",
-                        "student_guidance": analysis_result.get('victim_support_message', 'Stay safe online.'),
-                        "parent_guidance": "Monitor activity and discuss safety.",
-                        "next_steps": analysis_result.get('safe_response_steps', ["Step 1: Stay calm", "Step 2: Ask for help", "Step 3: Block if needed"])[:3]
-                    }
-            except json.JSONDecodeError as je:
-                print(f"Failed to parse model output as JSON: {je}")
-                # Try to build a fallback object if JSON parsing fails
-                analysis_result = {
-                    "toxicity_score": 0,
-                    "severity_level": "Low",
-                    "explanation": "Could not parse detailed analysis.",
-                    "victim_support_message": "Stay safe!",
-                    "safe_response_steps": ["Check your connection", "Try again", "Stay safe"],
-                    "detected_labels": {},
-                    "parent_alert_required": False,
-                    "support_panel_content": {
-                        "context_summary": "Analysis error",
-                        "student_guidance": "Something went wrong during analysis.",
-                        "parent_guidance": "Please try again later.",
-                        "next_steps": ["Retry", "Contact support", "Wait"]
-                    }
-                }
-        except Exception as ai_err:
-            print(f"AI Generation Error: {ai_err}")
-            return jsonify({'error': f'AI Service Error: {str(ai_err)}'}), 503
+    except Exception:
+        analysis = {
+            "toxicity_score": 0,
+            "severity_level": "Low",
+            "explanation": "Analysis failed",
+            "victim_support_message": "Stay safe",
+            "safe_response_steps": [],
+            "detected_labels": {},
+            "parent_alert_required": False
+        }
 
-        # Ensure labels exist in response
-        if 'detected_labels' not in analysis_result:
-            analysis_result['detected_labels'] = {}
+    new = Analysis(
+        user_id=current_user.id,
+        toxicity_score=analysis.get('toxicity_score', 0),
+        severity_level=analysis.get('severity_level', 'Low'),
+        explanation=analysis.get('explanation', ''),
+        victim_support_message=analysis.get('victim_support_message', ''),
+        safe_response_steps=json.dumps(analysis.get('safe_response_steps', [])),
+        labels=json.dumps(analysis.get('detected_labels', {})),
+        content_preview=text[:100]
+    )
 
-        # Save analysis to database
-        new_analysis = Analysis(
-            user_id=current_user.id,
-            toxicity_score=analysis_result.get('toxicity_score', 0),
-            severity_level=analysis_result.get('severity_level', 'Low'),
-            explanation=analysis_result.get('explanation', ''),
-            victim_support_message=analysis_result.get('victim_support_message', ''),
-            safe_response_steps=json.dumps(analysis_result.get('safe_response_steps', [])),
-            labels=json.dumps(analysis_result.get('detected_labels', {})),
-            content_preview=text_content[:100] if text_content else "Image Analysis"
+    db.session.add(new)
+    db.session.commit()
+
+    if analysis.get('parent_alert_required'):
+        send_email_alert(
+            current_user.parent_email,
+            current_user.name,
+            analysis.get('toxicity_score'),
+            analysis.get('severity_level'),
+            analysis.get('detected_labels')
         )
-        db.session.add(new_analysis)
-        db.session.commit()
 
-        # Trigger email alert if needed (critical severity)
-        if analysis_result.get('parent_alert_required', False):
-            send_email_alert(
-                current_user.parent_email,
-                current_user.name,
-                analysis_result.get('toxicity_score', 0),
-                analysis_result.get('severity_level', 'Unknown'),
-                analysis_result.get('detected_labels', {})
-            )
+    return jsonify(analysis)
 
-        return jsonify(analysis_result)
-
-    except json.JSONDecodeError as je:
-        print(f"Failed to parse model output as JSON: {je}")
-        return jsonify({'error': 'Failed to parse model output'}), 500
-    except Exception as e:
-        print(f"Error calling AI or processing request: {e}")
-        return jsonify({'error': 'Failed to analyze content'}), 500
-
+# =========================
+# RUN
+# =========================
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
