@@ -108,6 +108,7 @@ function updateUI(data) {
     }
 
     disableAnalyze(false);
+    addToHistory(data);
 }
 
 // ==============================
@@ -189,3 +190,92 @@ function renderSafeSteps(steps) {
         ? steps.map(s => `<li class="response-item">${s}</li>`).join("")
         : "<li>Talk to a trusted adult.</li>";
 }
+
+// ==============================
+// HISTORY & MODAL
+// ==============================
+let analysisHistory = [];
+
+function addToHistory(data) {
+    analysisHistory.unshift(data);
+    renderHistory();
+}
+
+function renderHistory() {
+    const list = document.getElementById("historyList");
+    const emptyMsg = document.getElementById("noHistoryMsg");
+    if (!list) return;
+
+    list.innerHTML = "";
+
+    if (analysisHistory.length === 0) {
+        if (emptyMsg) emptyMsg.style.display = "block";
+        return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = "none";
+
+    analysisHistory.forEach((item, index) => {
+        const li = document.createElement("li");
+        li.className = "history-item";
+
+        // Format detected labels
+        const LABEL_MAP = {
+            harassment: "Harassment",
+            threats: "Threats",
+            sexual_content: "Sexual Content",
+            grooming: "Grooming",
+            manipulation: "Manipulation",
+            emotional_abuse: "Emotional Abuse",
+            hate_speech: "Hate Speech",
+            violence: "Violence",
+            self_harm_risk: "Self-Harm Risk"
+        };
+
+        const labels = Object.entries(item.detected_labels || {})
+            .filter(([key, val]) => val && LABEL_MAP[key])
+            .map(([key, _]) => LABEL_MAP[key])
+            .join(", ") || "Safe";
+
+        li.innerHTML = `
+            <div class="history-info">
+                <span class="history-severity ${item.severity_level}">${item.severity_level} Risk</span>
+                <span class="history-labels">${labels}</span>
+            </div>
+            <button class="history-btn" onclick="showReason(${index})">Why?</button>
+        `;
+        list.appendChild(li);
+    });
+}
+
+function showReason(index) {
+    const item = analysisHistory[index];
+    if (!item) return;
+
+    const modal = document.getElementById("reasonModal");
+    const explanation = document.getElementById("modalExplanationText");
+    const support = document.getElementById("modalSupportText");
+
+    if (explanation) explanation.textContent = item.explanation || "No explanation provided.";
+    if (support) support.textContent = item.victim_support_message || "Reach out to a trusted adult.";
+
+    if (modal) modal.style.display = "block";
+}
+
+// Modal Listeners
+document.addEventListener("DOMContentLoaded", () => {
+    const modal = document.getElementById("reasonModal");
+    const span = document.querySelector(".close-modal");
+
+    if (span && modal) {
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+    }
+
+    window.onclick = function(event) {
+        if (modal && event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+});
