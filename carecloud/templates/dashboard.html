@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
 <div class="agent-container">
-    <!-- Agent Status Header -->
+
+    <!-- HEADER -->
     <div class="agent-status-header">
         <div class="status-left">
             <div class="agent-indicator active"></div>
-            <div class="status-text">
-                <h1>CareCloud Agent</h1>
-                <p class="status-label">Agent Active</p>
+            <div>
+                <h1>CareCloud Safety Agent</h1>
+                <p class="status-label">Protecting you in real time</p>
             </div>
         </div>
         <div class="user-info">
@@ -19,9 +19,11 @@
     </div>
 
     <div class="dashboard-layout">
-        <!-- Main Action Card -->
+
+        <!-- LEFT: ANALYSIS -->
         <div class="action-card">
-            <!-- Toxicity Meter Gauge -->
+
+            <!-- GAUGE -->
             <div class="meter-container">
                 <div class="gauge-wrapper">
                     <div class="gauge-background"></div>
@@ -31,173 +33,153 @@
                 <div class="gauge-labels">
                     <span>Safe</span>
                     <span>Moderate</span>
-                    <span>High</span>
+                    <span>High Risk</span>
                 </div>
             </div>
 
-            <div class="card-header">
-                <h2>Analyze Content</h2>
-                <p class="card-subtitle">Submit text or image for safety analysis</p>
-            </div>
+            <h2>Analyze Content</h2>
+            <p class="card-subtitle">
+                Paste any message or upload a screenshot. CareCloud will protect you.
+            </p>
 
-            <form id="analyzeForm" class="analyze-form">
-                <div class="form-field">
-                    <label for="text_content">Text or Message</label>
-                    <textarea 
-                        id="text_content" 
-                        name="text" 
-                        rows="6" 
-                        placeholder="Paste text, comment, or message to analyze..."
-                        class="input-textarea"
-                    ></textarea>
-                </div>
+            <form id="analyzeForm" enctype="multipart/form-data">
+                <label>Text / Message</label>
+                <textarea
+                    name="text"
+                    id="text_content"
+                    placeholder="Paste messages, comments, or anything that feels uncomfortable..."
+                    rows="6"
+                ></textarea>
 
-                <div class="form-field">
-                    <label for="image_file">Screenshot (Optional)</label>
-                    <input 
-                        type="file" 
-                        id="image_file" 
-                        name="image" 
-                        accept="image/*"
-                        class="input-file"
-                    >
-                </div>
+                <label>Screenshot (optional)</label>
+                <input type="file" name="image" accept="image/*">
 
-                <button type="submit" class="btn-analyze" id="analyzeBtn">Analyze Now</button>
+                <button type="submit" class="btn-analyze">Analyze Now</button>
             </form>
 
-            <!-- Analysis State Display -->
-            <div id="stateContainer" class="state-display">
-                <div id="idleState" class="state idle-state">
-                    <p>Ready to analyze. Submit content above.</p>
-                </div>
-
-                <div id="analyzingState" class="state analyzing-state" style="display: none;">
+            <!-- STATES -->
+            <div id="stateContainer">
+                <div id="analyzingState" style="display:none">
                     <div class="agent-spinner"></div>
-                    <p>Analyzing content...</p>
+                    <p>Analyzing safely...</p>
                 </div>
 
-                <div id="safeState" class="state safe-state" style="display: none;">
-                    <div class="state-icon">✓</div>
-                    <p>Content assessed as safe</p>
+                <div id="safeState" style="display:none" class="safe-state">
+                    ✅ Content appears safe
                 </div>
 
-                <div id="riskState" class="state risk-state" style="display: none;">
-                    <div class="state-icon">!</div>
-                    <p>Potential risk detected</p>
+                <div id="riskState" style="display:none" class="risk-state">
+                    ⚠ Potential harm detected
                 </div>
             </div>
         </div>
 
-        <!-- Analysis Results Panel -->
+        <!-- RIGHT: RESULTS -->
         <div class="results-panel">
-            <div id="resultsEmpty" class="results-empty">
-                <p>Analysis results will appear here</p>
+
+            <div id="resultsEmpty">
+                <p>Your analysis results will appear here</p>
             </div>
 
-            <div id="resultsContent" class="results-content" style="display: none;">
-                <!-- Risk Score -->
+            <div id="resultsContent" style="display:none">
+
+                <!-- SCORE -->
                 <div class="risk-section">
                     <div class="risk-meter">
                         <div class="risk-bar" id="riskBar"></div>
                     </div>
                     <div class="risk-labels">
-                        <span class="risk-value" id="riskScore">0</span>
-                        <span class="risk-status" id="riskStatus">Safe</span>
+                        <span id="riskScore">0%</span>
+                        <span id="riskStatus">Safe</span>
                     </div>
                 </div>
 
-                <!-- Detection Labels -->
+                <!-- LABELS -->
                 <div class="detections-section">
-                    <h3>Detections</h3>
+                    <h3>What was detected</h3>
                     <div id="labelsContainer" class="labels-minimal"></div>
                 </div>
 
-                <!-- Why This is Harmful -->
+                <!-- WHY HARMFUL -->
                 <div class="analysis-summary">
-                    <h3>Why This is Harmful</h3>
-                    <p id="explanationText"></p>
+                    <h3>Why this content is harmful</h3>
+                    <p id="explanationText">
+                        —
+                    </p>
                 </div>
 
-                <!-- Victim Support Guidance -->
-                <div id="victimSupportSection" class="victim-support-section" style="display: none;">
-                    <h3>Support for You</h3>
-                    <p id="victimSupportText"></p>
+                <!-- SUPPORT -->
+                <div id="victimSupportSection" class="victim-support-section">
+                    <h3>💙 Support for You</h3>
+                    <p id="victimSupportText">
+                        —
+                    </p>
                 </div>
 
-                <!-- Safe Response Steps -->
-                <div id="safeResponsesSection" class="safe-responses-section" style="display: none;">
-                    <h3>Safe Response Steps</h3>
-                    <div id="safeResponsesList" class="responses-list"></div>
+                <!-- STEPS -->
+                <div id="safeResponsesSection" class="safe-responses-section">
+                    <h3>What you can do now</h3>
+                    <ul id="safeResponsesList"></ul>
                 </div>
 
-                <!-- Parent Alert -->
-                <div id="alertInfo" class="alert-notification" style="display: none;">
-                    <span class="alert-icon">⚠</span>
-                    <span class="alert-text">Parent notified of high-risk content</span>
+                <!-- PARENT ALERT -->
+                <div id="alertInfo" class="alert-notification" style="display:none">
+                    ⚠ A parent or guardian has been notified for safety
                 </div>
             </div>
 
-            <!-- Recent Agent Insights -->
+            <!-- HISTORY -->
             <div class="agent-insights">
                 <h4>Recent Insights</h4>
-                <div id="insightsPanel" class="insights-list">
-                    {% if history %}
-                        {% for item in history %}
-                        <div class="history-item" onclick="showHistoryDetail('{{ item.explanation | replace('\\', '\\\\') | replace('\'', '\\\'') | replace('\"', '\\\"') | replace('\n', ' ') | replace('\r', ' ') | safe }}')">
-                            <div class="history-info">
-                                <span class="history-preview">{{ item.content_preview }}</span>
-                                <div class="history-meta">
-                                    <span>{{ item.timestamp.strftime('%H:%M') }}</span>
-                                    <span class="severity-badge severity-{{ item.severity_level.lower() }}">{{ item.severity_level }}</span>
-                                </div>
+
+                {% if history %}
+                    {% for item in history %}
+                    <div class="history-item">
+                        <div>
+                            <strong>{{ item.content_preview }}</strong>
+                            <div class="history-meta">
+                                {{ item.timestamp.strftime('%H:%M') }}
+                                <span class="severity-{{ item.severity_level.lower() }}">
+                                    {{ item.severity_level }}
+                                </span>
                             </div>
-                            <div class="history-score">{{ item.toxicity_score }}%</div>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <p class="text-muted">No recent analysis</p>
-                    {% endif %}
-                </div>
+                        <div>{{ item.toxicity_score }}%</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">No previous analysis</p>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Support Panel -->
-    <div class="support-panel" id="supportPanel">
-        <h3><span class="icon">💙</span> Support & Guidance</h3>
-        <div class="support-content">
-            <p id="supportSummary">Remember: You are not alone. CareCloud is here to help you navigate online spaces safely. If you encounter something that makes you feel uncomfortable, take a deep breath—it's okay to ask for help.</p>
-            
-            <div class="support-steps" id="supportNextSteps">
-                <div class="support-step">
-                    <h4>For Students</h4>
-                    <p id="studentGuidance">If you're upset, talk to a trusted adult. It's okay to step away from the screen for a while.</p>
-                </div>
-                <div class="support-step">
-                    <h4>For Parents</h4>
-                    <p id="parentGuidance">Use these insights as a starting point for a supportive, non-judgmental conversation about online safety.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+    <!-- SUPPORT PANEL -->
+    <div class="support-panel">
+        <h3>🛡 Safety Reminder</h3>
+        <p>
+            You deserve to feel safe online. If something feels wrong,
+            trust your feelings and talk to someone you trust.
+        </p>
 
-<!-- Reason Modal -->
-<div id="reasonModal" class="modal">
-    <div class="modal-content">
-        <button class="close-modal" onclick="closeReasonModal()">&times;</button>
-        <div class="modal-header">
-            <h2>Analysis Explanation</h2>
-        </div>
-        <div id="modalBody" class="modal-body">
-            <p id="modalExplanation"></p>
-            <div class="analysis-summary" style="margin-top: 1.5rem;">
-                <h3>Why was this flagged?</h3>
-                <p>Our AI detected patterns in the content that match common safety concerns. This explanation is meant to help you understand the context and stay safe.</p>
+        <div class="support-columns">
+            <div>
+                <h4>For Students</h4>
+                <p>
+                    You did the right thing by checking this message.
+                    It's okay to block, report, or step away.
+                </p>
+            </div>
+            <div>
+                <h4>For Parents</h4>
+                <p>
+                    Use this insight to guide calm, supportive conversations —
+                    not punishment.
+                </p>
             </div>
         </div>
     </div>
+
 </div>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
