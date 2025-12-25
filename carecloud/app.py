@@ -304,7 +304,7 @@ def analyze():
                     "victim_support_message": "Stay safe!",
                     "safe_response_steps": ["Check your connection", "Try again", "Stay safe"],
                     "detected_labels": {},
-                    "parent_alert_required": false,
+                    "parent_alert_required": False,
                     "support_panel_content": {
                         "context_summary": "Analysis error",
                         "student_guidance": "Something went wrong during analysis.",
