@@ -1,10 +1,7 @@
-Flask
-Flask-SQLAlchemy
-Flask-Login
-google-generativeai
-werkzeug
-python-dotenv
-# Pillow
-# pytesseract
-gunicorn
+flask
+flask-login
 flask-sqlalchemy
+werkzeug
+google-generativeai
+python-dotenv
+gunicorn
