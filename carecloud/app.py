@@ -46,16 +46,13 @@ def logged_in():
 def local_analyze(text):
     text = text.lower()
 
+    # Strictly the 7 labels requested
     labels = {
-        "profanity": False,
-        "harassment": False,
-        "insult": False,
-        "hate_speech": False,
-        "threat": False,
         "sexual_content": False,
         "grooming": False,
-        "emotional_abuse": False,
+        "harassment": False,
         "manipulation": False,
+        "emotional_abuse": False,
         "violence": False,
         "self_harm_risk": False
     }
@@ -67,10 +64,10 @@ def local_analyze(text):
     steps = ["Continue being positive online."]
     guidance = "No action needed."
 
-    # Logic
+    # Logic mappings
     if any(w in text for w in ["die", "kill myself", "suicide", "end it"]):
         labels["self_harm_risk"] = True
-        labels["emotional_abuse"] = True
+        labels["emotional_abuse"] = True # Self-harm often correlates with emotional distress
         score = 95
         severity = "Critical"
         explanation = "This message indicates a risk of self-harm."
@@ -80,7 +77,7 @@ def local_analyze(text):
 
     elif any(w in text for w in ["kill you", "punch", "hurt", "beat", "gun", "knife", "die"]):
         labels["violence"] = True
-        labels["threat"] = True
+        labels["harassment"] = True
         score = 90
         severity = "Critical"
         explanation = "This message contains threats of violence."
@@ -89,26 +86,34 @@ def local_analyze(text):
         guidance = "Assess safety. Report threats to authorities if serious."
 
     elif any(w in text for w in ["hate", "ugly", "stupid", "idiot", "fat", "loser"]):
-        labels["hate_speech"] = True
         labels["harassment"] = True
-        labels["insult"] = True
         labels["emotional_abuse"] = True
         score = 75
         severity = "High"
-        explanation = "This message contains insults and hate speech."
+        explanation = "This message contains insults and harassment."
         support = "Their words reflect them, not you. You are worthy."
         steps = ["Ignore the message", "Block the sender", "Talk to a friend"]
         guidance = "Discuss how to handle bullies. Reassure the child."
 
     elif any(w in text for w in ["sex", "nude", "send pic"]):
         labels["sexual_content"] = True
-        labels["grooming"] = True
+        labels["grooming"] = True # Strict rule: assume grooming risk in messages
         score = 85
         severity = "High"
         explanation = "This message contains inappropriate sexual content."
         support = "This is not appropriate. You don't have to respond."
         steps = ["Block immediately", "Do not share photos", "Tell an adult"]
         guidance = "Check for grooming signs. Report user."
+
+    # Consistency Check (Risk Score Rules)
+    if labels["sexual_content"] and score < 70:
+        score = 70
+        severity = "High"
+    if labels["grooming"] and score < 80:
+        score = 80
+        severity = "Critical" # 80 is High/Critical border, prompt says 70-89 High, 90-100 Critical. 80 is High.
+        if score >= 90: severity = "Critical"
+        else: severity = "High"
 
     return {
         "risk_score": score,
@@ -221,147 +226,109 @@ def gemini_analyze(text):
     prompt = f"""
 You are CareCloud Safety AI.
 
-Your role is to protect children and teenagers from harmful online content
-in a calm, non-judgmental, emotionally safe way.
+Your job is to protect children and teenagers from harmful online messages.
 
-You are NOT a police system.
-You are NOT here to shame, punish, or scare.
-You are here to:
-- Identify harm
-- Explain risk gently
-- Support the victim
-- Guide safe next steps
-
-Always assume the content may be read by a vulnerable child.
+This system is SAFETY-FIRST.
+False negatives are NOT acceptable.
 
 --------------------------------------------------
-ANALYSIS GOALS
+CRITICAL CONSISTENCY RULE (VERY IMPORTANT)
 --------------------------------------------------
-When analyzing content, you must:
+Your outputs MUST be logically consistent.
 
-1. Detect harmful INTENT, not just words
-2. Consider emotional impact on a child
-3. Be conservative but protective
-4. Prefer false-positive safety over silence
-5. NEVER freeze, refuse, or moralize
+If risk_score >= 40:
+- You MUST detect at least one harmful label
+- You MUST explain why the content is harmful
+- You MUST NOT say “safe” or “no risks detected”
 
---------------------------------------------------
-LABEL DEFINITIONS (INTENT-BASED)
---------------------------------------------------
-You must assign labels ONLY when intent is present.
+If risk_score >= 70:
+- sexual_content, harassment, grooming, or emotional_abuse
+  MUST be evaluated VERY STRICTLY
 
-Use these labels:
-
-- profanity:
-  Swear words or vulgar language without direct targeting
-
-- harassment:
-  Repeated or targeted insulting language meant to hurt
-
-- insult:
-  Single-instance humiliation or name-calling
-
-- hate_speech:
-  Attacks based on identity (race, gender, religion, disability, etc.)
-
-- threat:
-  Any suggestion of harm, violence, or intimidation
-
-- sexual_content:
-  Sexual language inappropriate for minors
-
-- grooming:
-  Manipulation, trust-building, secrecy, or sexual undertones involving minors
-
-- emotional_abuse:
-  Gaslighting, humiliation, worthlessness, control, fear
-
-- manipulation:
-  Pressure, coercion, guilt-tripping, psychological control
-
-- violence:
-  Encouraging or describing physical harm
-
-- self_harm_risk:
-  Encouragement or normalization of self-harm or suicide
+If content contains:
+- sexual acts
+- explicit body parts
+- invitations involving sex
+THEN:
+- sexual_content = true
+- grooming = true IF the target could be a minor
 
 --------------------------------------------------
-SCORING RULES
+ABSOLUTE RULES (DO NOT BREAK)
 --------------------------------------------------
-Generate a risk score from 0–100:
-
-0–20   → Safe
-21–39  → Mild concern
-40–69  → Harmful
-70–89  → High risk
-90–100 → Critical risk
-
-Score must reflect:
-- emotional harm
-- vulnerability
-- severity
-- intent
+- Sexual language is NEVER safe for children
+- Invitations to sexual acts = HIGH RISK
+- Flirtation + explicit language = grooming risk
+- “Cute + sexual act” = manipulation + sexual content
+- Never downplay sexual harm
 
 --------------------------------------------------
-WHAT TO SHOW THE CHILD (USER)
+LABEL DEFINITIONS (MANDATORY)
 --------------------------------------------------
-Use SIMPLE, KIND, SUPPORTIVE language.
+sexual_content:
+  Any explicit sexual language, body parts, or sexual acts
 
-Never say:
-❌ "You are wrong"
-❌ "This is illegal"
-❌ "You should be punished"
+grooming:
+  Flattery + sexual intent, invitations, or normalization of sexual behavior
 
-Always say things like:
-✅ "This message could be hurtful"
-✅ "You didn’t do anything wrong"
-✅ "It’s okay to ask for help"
+harassment:
+  Unwanted sexual advances or objectifying language
+
+manipulation:
+  Emotional pressure or normalization of inappropriate behavior
 
 --------------------------------------------------
-OUTPUT FORMAT (STRICT JSON)
+SCORING RULES (STRICT)
 --------------------------------------------------
-Return ONLY valid JSON in this format:
+If sexual_content = true → minimum risk_score = 70
+If grooming = true → minimum risk_score = 80
+
+--------------------------------------------------
+WHAT TO TELL THE CHILD
+--------------------------------------------------
+- Use calm, supportive language
+- NEVER say “this is safe” if sexual content exists
+- Always reassure the child they did nothing wrong
+
+--------------------------------------------------
+OUTPUT FORMAT (STRICT JSON ONLY)
+--------------------------------------------------
+Return ONLY valid JSON:
 
 {{
   "risk_score": number,
   "severity_level": "Low | Medium | High | Critical",
 
   "detected_labels": {{
-    "profanity": true/false,
-    "harassment": true/false,
-    "insult": true/false,
-    "hate_speech": true/false,
-    "threat": true/false,
     "sexual_content": true/false,
     "grooming": true/false,
-    "emotional_abuse": true/false,
+    "harassment": true/false,
     "manipulation": true/false,
+    "emotional_abuse": true/false,
     "violence": true/false,
     "self_harm_risk": true/false
   }},
 
-  "why_harmful": "Explain clearly WHY this message is harmful in child-safe language. No blame.",
+  "why_harmful": "Clear explanation of why this content is unsafe for a child",
 
-  "victim_support_message": "A comforting message reminding the child they are not alone and did nothing wrong.",
+  "victim_support_message": "Kind, reassuring message",
 
   "safe_response_steps": [
-    "Step 1 – what the child can do",
-    "Step 2 – another safe action",
-    "Step 3 – optional support step"
+    "Block or mute the sender",
+    "Do not reply",
+    "Tell a trusted adult"
   ],
 
-  "parent_guidance": "Calm, supportive advice for parents. Never judgmental."
+  "parent_guidance": "Supportive advice, not punishment"
 }}
 
 --------------------------------------------------
-IMPORTANT RULES
+FINAL CHECK (SELF-VERIFY)
 --------------------------------------------------
-- Never hallucinate crimes
-- Never include explicit content
-- Never instruct retaliation
-- Never suggest punishment
-- Always prioritize emotional safety
-- Always finish the analysis
+Before responding, verify:
+- Do labels match the risk_score?
+- Does explanation match detected labels?
+- Is sexual content ever marked safe? (If yes → FIX IT)
 
 Message to analyze:
 \"\"\"{text}\"\"\"
