@@ -1,208 +1,224 @@
 import os
 import json
 import requests
-from datetime import datetime
-from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, jsonify, session
+from werkzeug.utils import secure_filename
 
-from flask_mail import Mail, Message
 import google.generativeai as genai
 
-# =======================
-# ENV
-# =======================
-load_dotenv()
-
-# =======================
-# APP
-# =======================
+# -----------------------------
+# Flask App Setup
+# -----------------------------
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "carecloud-secret")
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///carecloud.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
-# =======================
-# MAIL
-# =======================
-app.config["MAIL_SERVER"] = "smtp.gmail.com"
-app.config["MAIL_PORT"] = 587
-app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_USERNAME"] = os.getenv("MAIL_USER")
-app.config["MAIL_PASSWORD"] = os.getenv("MAIL_PASS")
-app.config["MAIL_DEFAULT_SENDER"] = os.getenv("MAIL_USER")
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-mail = Mail(app)
-db = SQLAlchemy(app)
+# -----------------------------
+# Environment Variables
+# -----------------------------
+PERSPECTIVE_API_KEY = os.environ.get("PERSPECTIVE_API_KEY")
+GEMINI_API_KEY = os.environ.get("AI_INTEGRATIONS_GEMINI")
+MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
 
-# =======================
-# LOGIN
-# =======================
-login_manager = LoginManager(app)
-login_manager.login_view = "login"
+# -----------------------------
+# Gemini Setup
+# -----------------------------
+genai.configure(api_key=GEMINI_API_KEY)
+gemini = genai.GenerativeModel("gemini-pro")
 
-# =======================
-# AI SETUP
-# =======================
-genai.configure(api_key=os.getenv("AI_INTEGRATIONS_GEMINI_API_KEY"))
-gemini = genai.GenerativeModel("models/gemini-pro")
-
-PERSPECTIVE_KEY = os.getenv("PERSPECTIVE_API_KEY")
-
-# =======================
-# MODELS
-# =======================
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100))
-    email = db.Column(db.String(120), unique=True)
-    password_hash = db.Column(db.String(256))
-    parent_email = db.Column(db.String(120))
-
-    def set_password(self, pw):
-        self.password_hash = generate_password_hash(pw)
-
-    def check_password(self, pw):
-        return check_password_hash(self.password_hash, pw)
+# -----------------------------
+# Routes
+# -----------------------------
+@app.route("/")
+def home():
+    return render_template("login.html")
 
 
-class Analysis(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    content_preview = db.Column(db.Text)
-    toxicity_score = db.Column(db.Integer)
-    severity_level = db.Column(db.String(20))
-    labels = db.Column(db.Text)
-    explanation = db.Column(db.Text)
-    support = db.Column(db.Text)
-    steps = db.Column(db.Text)
+@app.route("/dashboard")
+def dashboard():
+    # Ensure user exists for template
+    user = {
+        "name": session.get("username", "Student")
+    }
+    history = []
+    return render_template("dashboard.html", user=user, history=history)
 
-@login_manager.user_loader
-def load_user(uid):
-    return User.query.get(int(uid))
 
-# =======================
-# PERSPECTIVE
-# =======================
+# -----------------------------
+# Perspective API Analysis
+# -----------------------------
 def perspective_analyze(text):
-    url = f"https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze?key={PERSPECTIVE_KEY}"
+    url = "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze"
     payload = {
         "comment": {"text": text},
+        "languages": ["en"],
         "requestedAttributes": {
             "TOXICITY": {},
-            "THREAT": {},
+            "SEVERE_TOXICITY": {},
             "INSULT": {},
+            "THREAT": {},
+            "IDENTITY_ATTACK": {},
             "SEXUALLY_EXPLICIT": {}
         }
     }
-    r = requests.post(url, json=payload, timeout=10)
-    data = r.json()["attributeScores"]
 
-    def score(k):
-        return int(data[k]["summaryScore"]["value"] * 100)
+    response = requests.post(
+        f"{url}?key={PERSPECTIVE_API_KEY}",
+        json=payload,
+        timeout=10
+    )
 
-    return {
-        "toxicity": score("TOXICITY"),
-        "threat": score("THREAT"),
-        "sexual": score("SEXUALLY_EXPLICIT"),
-        "insult": score("INSULT")
-    }
+    data = response.json()
+    scores = {}
 
-# =======================
-# GEMINI ANALYSIS
-# =======================
+    for key, value in data.get("attributeScores", {}).items():
+        scores[key.lower()] = round(
+            value["summaryScore"]["value"] * 100
+        )
+
+    return scores
+
+
+# -----------------------------
+# Gemini Deep Safety Analysis
+# -----------------------------
 def gemini_analyze(text):
-    prompt = open("prompt.txt").read().replace("{TEXT}", text)
-    response = gemini.generate_content(prompt).text
-    return json.loads(response[response.find("{"):response.rfind("}")+1])
+    prompt_lines = [
+        "You are CareCloud Guardian AI.",
+        "Your mission is to protect children and teenagers online.",
+        "",
+        "CRITICAL SAFETY RULES:",
+        "- Treat all content as if read by a vulnerable child.",
+        "- Detect bullying, harassment, humiliation, insults.",
+        "- Detect threats, violence, intimidation.",
+        "- Detect grooming, manipulation, coercion.",
+        "- Detect sexual content, especially involving minors.",
+        "- Detect emotional abuse and self-harm encouragement.",
+        "",
+        "Analyze the message below:",
+        text,
+        "",
+        "Return ONLY valid JSON in this format:",
+        "{",
+        ' "gemini_score": number (0-100),',
+        ' "detected_labels": {',
+        '   "harassment": true/false,',
+        '   "threats": true/false,',
+        '   "sexual_content": true/false,',
+        '   "grooming": true/false,',
+        '   "manipulation": true/false,',
+        '   "emotional_abuse": true/false,',
+        '   "hate_speech": true/false,',
+        '   "violence": true/false,',
+        '   "self_harm_risk": true/false',
+        ' },',
+        ' "why_harmful": "string",',
+        ' "victim_support": "string",',
+        ' "safety_steps": ["step1", "step2"],',
+        ' "parent_guidance": "string"',
+        "}"
+    ]
 
-# =======================
-# EMAIL
-# =======================
-def notify_parent(user, analysis):
-    if analysis["severity_level"] != "High":
+    prompt = "\n".join(prompt_lines)
+
+    response = gemini.generate_content(prompt).text
+
+    start = response.find("{")
+    end = response.rfind("}") + 1
+
+    return json.loads(response[start:end])
+
+
+# -----------------------------
+# Email Alert (SMTP)
+# -----------------------------
+def send_parent_alert(message, score):
+    if not MAIL_USERNAME or not MAIL_PASSWORD:
         return
 
-    msg = Message(
-        subject="⚠️ CareCloud Safety Alert",
-        recipients=[user.parent_email],
-        body=f"""
+    msg = MIMEMultipart()
+    msg["From"] = MAIL_USERNAME
+    msg["To"] = MAIL_USERNAME
+    msg["Subject"] = "⚠️ CareCloud Alert: High Risk Content Detected"
+
+    body = f"""
 High-risk content detected.
 
-Child: {user.name}
-Score: {analysis['toxicity_score']}%
+Message:
+{message}
 
-Reason:
-{analysis['explanation']}
+Risk Score: {score}%
+
+Please review and support the child.
 """
-    )
-    mail.send(msg)
 
-# =======================
-# ROUTES
-# =======================
-@app.route("/dashboard")
-@login_required
-def dashboard():
-    history = Analysis.query.filter_by(user_id=current_user.id).order_by(Analysis.timestamp.desc()).all()
-    return render_template("dashboard.html", user=current_user, history=history)
+    msg.attach(MIMEText(body, "plain"))
 
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        server.starttls()
+        server.login(MAIL_USERNAME, MAIL_PASSWORD)
+        server.send_message(msg)
+
+
+# -----------------------------
+# Analyze Endpoint
+# -----------------------------
 @app.route("/analyze", methods=["POST"])
-@login_required
 def analyze():
     text = request.form.get("text", "").strip()
+
     if not text:
-        return jsonify({"error": "Empty input"}), 400
+        return jsonify({"error": "No text provided"}), 400
 
-    p = perspective_analyze(text)
-    g = gemini_analyze(text)
+    # Perspective
+    perspective_scores = perspective_analyze(text)
 
-    final_score = max(p.values() | {g["gemini_score"]})
-    severity = "Low"
+    # Gemini
+    gemini_data = gemini_analyze(text)
 
-    if p["threat"] > 60 or p["sexual"] > 60 or g["detected_labels"]["grooming"]:
-        severity = "High"
-    elif p["toxicity"] > 30 or g["detected_labels"]["manipulation"]:
-        severity = "Medium"
+    # Combine Scores
+    final_score = max(
+        perspective_scores.get("toxicity", 0),
+        gemini_data.get("gemini_score", 0)
+    )
 
-    result = {
+    severity = (
+        "High" if final_score >= 70 else
+        "Medium" if final_score >= 40 else
+        "Low"
+    )
+
+    if final_score >= 80:
+        send_parent_alert(text, final_score)
+
+    return jsonify({
         "toxicity_score": final_score,
         "severity_level": severity,
-        "detected_labels": g["detected_labels"],
-        "explanation": g["why_harmful"],
-        "victim_support_message": g["victim_support"],
-        "safe_response_steps": g["safety_steps"],
-        "parent_alert_required": severity == "High",
+        "detected_labels": gemini_data.get("detected_labels", {}),
+        "explanation": gemini_data.get("why_harmful", ""),
+        "victim_support_message": gemini_data.get("victim_support", ""),
+        "safe_response_steps": gemini_data.get("safety_steps", []),
+        "parent_alert_required": final_score >= 80,
         "support_panel_content": {
-            "context_summary": g["why_harmful"],
-            "student_guidance": g["victim_support"],
-            "parent_guidance": g["parent_guidance"]
+            "context_summary": gemini_data.get("why_harmful", ""),
+            "student_guidance": gemini_data.get("victim_support", ""),
+            "parent_guidance": gemini_data.get("parent_guidance", ""),
+            "next_steps": gemini_data.get("safety_steps", [])
         }
-    }
+    })
 
-    db.session.add(Analysis(
-        user_id=current_user.id,
-        content_preview=text[:120],
-        toxicity_score=final_score,
-        severity_level=severity,
-        labels=json.dumps(g["detected_labels"]),
-        explanation=g["why_harmful"],
-        support=g["victim_support"],
-        steps=json.dumps(g["safety_steps"])
-    ))
-    db.session.commit()
 
-    notify_parent(current_user, result)
-    return jsonify(result)
-
-# =======================
-# RUN
-# =======================
+# -----------------------------
+# Run App
+# -----------------------------
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
