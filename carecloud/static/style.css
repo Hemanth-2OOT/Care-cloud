@@ -217,7 +217,64 @@ textarea:focus {
     padding: 1.5rem;
     border-radius: 1rem;
     background: rgba(13,148,136,0.1);
+}
+
+/* ================================
+   TIPS SECTION (Always Visible)
+================================ */
+.tips-section {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: rgba(13, 148, 136, 0.08);
+    border-radius: 1rem;
+    border: 1px solid rgba(13, 148, 136, 0.15);
+}
+
+.tips-section h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: var(--teal-light);
+}
+
+.tips-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (min-width: 600px) {
+    .tips-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
+}
+
+.tip-card {
+    background: rgba(15, 23, 42, 0.4);
+    padding: 1rem;
+    border-radius: 0.75rem;
+    text-align: center;
+    transition: transform 0.2s;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.tip-card:hover {
+    transform: translateY(-2px);
+    background: rgba(15, 23, 42, 0.6);
+}
+
+.tip-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.tip-card p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
 /* =========================
    LOGIN UI HARD FIX
 ========================= */
@@ -298,4 +355,110 @@ textarea:focus {
     border-radius: 0.5rem;
     margin-bottom: 1rem;
     font-size: 0.85rem;
+}
+
+/* ================================
+   MODAL & HISTORY
+================================ */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.7);
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  background: var(--navy-base);
+  margin: 15% auto;
+  padding: 2rem;
+  border: 1px solid var(--teal-primary);
+  border-radius: 1rem;
+  width: 80%;
+  max-width: 600px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  color: var(--text-primary);
+  position: relative;
+}
+
+.close-modal {
+  color: var(--text-secondary);
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.close-modal:hover {
+  color: var(--teal-light);
+}
+
+.modal-support-box {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(13, 148, 136, 0.1);
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--teal-light);
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-item {
+  background: rgba(15, 23, 42, 0.4);
+  margin-bottom: 0.8rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s;
+}
+
+.history-item:hover {
+  transform: translateX(5px);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.history-labels {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.history-severity {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.history-severity.High { color: var(--risk-color); }
+.history-severity.Medium { color: var(--warning-color); }
+.history-severity.Low { color: var(--safe-color); }
+
+.history-btn {
+  background: var(--teal-primary);
+  border: none;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.history-btn:hover {
+  background: var(--teal-light);
 }

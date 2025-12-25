@@ -93,6 +93,37 @@
         </div>
       </div>
 
+      <!-- POSITIVE TIPS SECTION (ALWAYS VISIBLE) -->
+      <div class="tips-section">
+        <h3>💡 Positive Vibes</h3>
+        <div class="tips-grid">
+          <div class="tip-card">
+            <span class="tip-icon">✨</span>
+            <p>You are not alone.</p>
+          </div>
+          <div class="tip-card">
+            <span class="tip-icon">💪</span>
+            <p>Asking for help is strong.</p>
+          </div>
+          <div class="tip-card">
+            <span class="tip-icon">🛡</span>
+            <p>You have power to block.</p>
+          </div>
+          <div class="tip-card">
+            <span class="tip-icon">❤️</span>
+            <p>Mean words ≠ Your worth.</p>
+          </div>
+          <div class="tip-card">
+            <span class="tip-icon">🧘</span>
+            <p>Take a social media break.</p>
+          </div>
+          <div class="tip-card">
+            <span class="tip-icon">🤝</span>
+            <p>Find positive friends.</p>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- RIGHT PANEL -->
@@ -148,9 +179,25 @@
       <!-- HISTORY -->
       <div class="agent-insights">
         <h4>Recent Insights</h4>
-        <p class="text-muted">No previous analysis</p>
+        <ul id="historyList" class="history-list">
+          <!-- JS populates this -->
+        </ul>
+        <p id="noHistoryMsg" class="text-muted">No previous analysis</p>
       </div>
 
+    </div>
+  </div>
+
+  <!-- REASON MODAL -->
+  <div id="reasonModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <h3>Why was this flagged?</h3>
+      <p id="modalExplanationText"></p>
+      <div class="modal-support-box">
+        <h4>Guidance</h4>
+        <p id="modalSupportText"></p>
+      </div>
     </div>
   </div>
 

@@ -6,10 +6,17 @@
 
   <div class="auth-card">
 
-    <h1>Welcome Back</h1>
-    <p class="auth-subtitle">
-      Sign in to continue protecting your digital space
-    </p>
+    {% if mode == 'signup' %}
+      <h1>Create Account</h1>
+      <p class="auth-subtitle">
+        Join CareCloud to stay safe online
+      </p>
+    {% else %}
+      <h1>Welcome Back</h1>
+      <p class="auth-subtitle">
+        Sign in to continue protecting your digital space
+      </p>
+    {% endif %}
 
     <!-- FLASH -->
     {% with messages = get_flashed_messages() %}
@@ -22,7 +29,14 @@
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="/login">
+    <form method="POST" action="{{ url_for('signup') if mode == 'signup' else url_for('login') }}">
+
+      {% if mode == 'signup' %}
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" name="name" placeholder="Your Name" required>
+      </div>
+      {% endif %}
 
       <div class="form-group">
         <label>Email</label>
@@ -34,17 +48,34 @@
         <input type="password" name="password" placeholder="••••••••" required>
       </div>
 
+      {% if mode == 'signup' %}
+      <div class="form-group">
+        <label>Parent's Email</label>
+        <input type="email" name="parent_email" placeholder="parent@example.com" required>
+        <small style="color:var(--text-muted); display:block; margin-top:0.25rem;">
+          We'll notify them only if high risks are detected.
+        </small>
+      </div>
+      {% endif %}
+
       <button type="submit" class="btn-primary">
-        Login
+        {{ 'Create Account' if mode == 'signup' else 'Login' }}
       </button>
 
     </form>
 
     <div class="auth-footer">
+      {% if mode == 'signup' %}
+      <p>
+        Already have an account?
+        <a href="/login">Login</a>
+      </p>
+      {% else %}
       <p>
         Don’t have an account?
         <a href="/signup">Sign up</a>
       </p>
+      {% endif %}
     </div>
 
   </div>
