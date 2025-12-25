@@ -14,8 +14,6 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
-import PIL.Image
-import pytesseract
 import google.generativeai as genai
 
 # =========================
@@ -199,10 +197,14 @@ Labels: {labels}
 def analyze():
     text = request.form.get("text", "")
     image = request.files.get("image")
-
     ocr_text = ""
-    if image:
-        img = PIL.Image.open(image.stream).convert("RGB")
+
+if image:
+    try:
+        from PIL import Image
+        import pytesseract
+
+        img = Image.open(image.stream).convert("RGB")
         ocr_text = pytesseract.image_to_string(img).strip()
 
     prompt = f"""
