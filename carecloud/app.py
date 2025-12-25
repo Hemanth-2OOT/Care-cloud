@@ -47,18 +47,21 @@ def local_analyze(text):
     text = text.lower()
 
     labels = {
+        "profanity": False,
         "harassment": False,
-        "threats": False,
+        "insult": False,
+        "hate_speech": False,
+        "threat": False,
         "sexual_content": False,
         "grooming": False,
-        "manipulation": False,
         "emotional_abuse": False,
-        "hate_speech": False,
+        "manipulation": False,
         "violence": False,
         "self_harm_risk": False
     }
 
     score = 10
+    severity = "Low"
     explanation = "This content appears safe."
     support = "Everything looks okay. Stay safe!"
     steps = ["Continue being positive online."]
@@ -69,6 +72,7 @@ def local_analyze(text):
         labels["self_harm_risk"] = True
         labels["emotional_abuse"] = True
         score = 95
+        severity = "Critical"
         explanation = "This message indicates a risk of self-harm."
         support = "You are precious. Please call a helpline or talk to an adult immediately."
         steps = ["Call 988 or a local helpline", "Talk to a parent now", "Do not be alone"]
@@ -76,8 +80,9 @@ def local_analyze(text):
 
     elif any(w in text for w in ["kill you", "punch", "hurt", "beat", "gun", "knife", "die"]):
         labels["violence"] = True
-        labels["threats"] = True
+        labels["threat"] = True
         score = 90
+        severity = "Critical"
         explanation = "This message contains threats of violence."
         support = "This is not okay. You have the right to be safe."
         steps = ["Block the user", "Report to platform", "Tell an adult"]
@@ -86,8 +91,10 @@ def local_analyze(text):
     elif any(w in text for w in ["hate", "ugly", "stupid", "idiot", "fat", "loser"]):
         labels["hate_speech"] = True
         labels["harassment"] = True
+        labels["insult"] = True
         labels["emotional_abuse"] = True
         score = 75
+        severity = "High"
         explanation = "This message contains insults and hate speech."
         support = "Their words reflect them, not you. You are worthy."
         steps = ["Ignore the message", "Block the sender", "Talk to a friend"]
@@ -97,17 +104,19 @@ def local_analyze(text):
         labels["sexual_content"] = True
         labels["grooming"] = True
         score = 85
+        severity = "High"
         explanation = "This message contains inappropriate sexual content."
         support = "This is not appropriate. You don't have to respond."
         steps = ["Block immediately", "Do not share photos", "Tell an adult"]
         guidance = "Check for grooming signs. Report user."
 
     return {
-        "gemini_score": score,
+        "risk_score": score,
+        "severity_level": severity,
         "detected_labels": labels,
         "why_harmful": explanation,
-        "victim_support": support,
-        "safety_steps": steps,
+        "victim_support_message": support,
+        "safe_response_steps": steps,
         "parent_guidance": guidance
     }
 
@@ -210,42 +219,152 @@ def perspective_analyze(text):
 # =====================================================
 def gemini_analyze(text):
     prompt = f"""
-You are CareCloud Guardian AI.
+You are CareCloud Safety AI.
 
-This system protects CHILDREN and TEENAGERS online.
+Your role is to protect children and teenagers from harmful online content
+in a calm, non-judgmental, emotionally safe way.
 
-CRITICAL RULES:
-- Assume the reader is emotionally vulnerable.
-- Be EXTREMELY strict.
-- Profanity, insults, humiliation = harmful.
-- Detect grooming, manipulation, coercion.
-- Detect sexual content (even subtle).
-- Detect threats, violence, intimidation.
-- Detect emotional abuse and self-harm encouragement.
+You are NOT a police system.
+You are NOT here to shame, punish, or scare.
+You are here to:
+- Identify harm
+- Explain risk gently
+- Support the victim
+- Guide safe next steps
 
-Message to analyze:
-\"\"\"{text}\"\"\"
+Always assume the content may be read by a vulnerable child.
 
-Respond ONLY in valid JSON:
+--------------------------------------------------
+ANALYSIS GOALS
+--------------------------------------------------
+When analyzing content, you must:
+
+1. Detect harmful INTENT, not just words
+2. Consider emotional impact on a child
+3. Be conservative but protective
+4. Prefer false-positive safety over silence
+5. NEVER freeze, refuse, or moralize
+
+--------------------------------------------------
+LABEL DEFINITIONS (INTENT-BASED)
+--------------------------------------------------
+You must assign labels ONLY when intent is present.
+
+Use these labels:
+
+- profanity:
+  Swear words or vulgar language without direct targeting
+
+- harassment:
+  Repeated or targeted insulting language meant to hurt
+
+- insult:
+  Single-instance humiliation or name-calling
+
+- hate_speech:
+  Attacks based on identity (race, gender, religion, disability, etc.)
+
+- threat:
+  Any suggestion of harm, violence, or intimidation
+
+- sexual_content:
+  Sexual language inappropriate for minors
+
+- grooming:
+  Manipulation, trust-building, secrecy, or sexual undertones involving minors
+
+- emotional_abuse:
+  Gaslighting, humiliation, worthlessness, control, fear
+
+- manipulation:
+  Pressure, coercion, guilt-tripping, psychological control
+
+- violence:
+  Encouraging or describing physical harm
+
+- self_harm_risk:
+  Encouragement or normalization of self-harm or suicide
+
+--------------------------------------------------
+SCORING RULES
+--------------------------------------------------
+Generate a risk score from 0–100:
+
+0–20   → Safe
+21–39  → Mild concern
+40–69  → Harmful
+70–89  → High risk
+90–100 → Critical risk
+
+Score must reflect:
+- emotional harm
+- vulnerability
+- severity
+- intent
+
+--------------------------------------------------
+WHAT TO SHOW THE CHILD (USER)
+--------------------------------------------------
+Use SIMPLE, KIND, SUPPORTIVE language.
+
+Never say:
+❌ "You are wrong"
+❌ "This is illegal"
+❌ "You should be punished"
+
+Always say things like:
+✅ "This message could be hurtful"
+✅ "You didn’t do anything wrong"
+✅ "It’s okay to ask for help"
+
+--------------------------------------------------
+OUTPUT FORMAT (STRICT JSON)
+--------------------------------------------------
+Return ONLY valid JSON in this format:
 
 {{
-  "gemini_score": number (0-100),
+  "risk_score": number,
+  "severity_level": "Low | Medium | High | Critical",
+
   "detected_labels": {{
+    "profanity": true/false,
     "harassment": true/false,
-    "threats": true/false,
+    "insult": true/false,
+    "hate_speech": true/false,
+    "threat": true/false,
     "sexual_content": true/false,
     "grooming": true/false,
-    "manipulation": true/false,
     "emotional_abuse": true/false,
-    "hate_speech": true/false,
+    "manipulation": true/false,
     "violence": true/false,
     "self_harm_risk": true/false
   }},
-  "why_harmful": "short explanation",
-  "victim_support": "empathetic message for the child",
-  "safety_steps": ["step1","step2"],
-  "parent_guidance": "calm guidance for parents"
+
+  "why_harmful": "Explain clearly WHY this message is harmful in child-safe language. No blame.",
+
+  "victim_support_message": "A comforting message reminding the child they are not alone and did nothing wrong.",
+
+  "safe_response_steps": [
+    "Step 1 – what the child can do",
+    "Step 2 – another safe action",
+    "Step 3 – optional support step"
+  ],
+
+  "parent_guidance": "Calm, supportive advice for parents. Never judgmental."
 }}
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+- Never hallucinate crimes
+- Never include explicit content
+- Never instruct retaliation
+- Never suggest punishment
+- Always prioritize emotional safety
+- Always finish the analysis
+
+Message to analyze:
+\"\"\"{text}\"\"\"
 """
 
     response = gemini.generate_content(prompt).text
@@ -310,14 +429,16 @@ def analyze():
 
     final_score = max(
         perspective.get("toxicity", 0),
-        gemini_data.get("gemini_score", 0)
+        gemini_data.get("risk_score", 0)
     )
 
-    severity = (
-        "High" if final_score >= 70
-        else "Medium" if final_score >= 40
-        else "Low"
-    )
+    severity = gemini_data.get("severity_level")
+    if not severity:
+        severity = (
+            "High" if final_score >= 70
+            else "Medium" if final_score >= 40
+            else "Low"
+        )
 
     if final_score >= 80:
         send_parent_alert(
@@ -331,14 +452,14 @@ def analyze():
         "severity_level": severity,
         "detected_labels": gemini_data["detected_labels"],
         "explanation": gemini_data["why_harmful"],
-        "victim_support_message": gemini_data["victim_support"],
-        "safe_response_steps": gemini_data["safety_steps"],
+        "victim_support_message": gemini_data.get("victim_support_message", gemini_data.get("victim_support")),
+        "safe_response_steps": gemini_data.get("safe_response_steps", gemini_data.get("safety_steps", [])),
         "parent_alert_required": final_score >= 80,
         "support_panel_content": {
             "context_summary": gemini_data["why_harmful"],
-            "student_guidance": gemini_data["victim_support"],
+            "student_guidance": gemini_data.get("victim_support_message", gemini_data.get("victim_support")),
             "parent_guidance": gemini_data["parent_guidance"],
-            "next_steps": gemini_data["safety_steps"]
+            "next_steps": gemini_data.get("safe_response_steps", gemini_data.get("safety_steps", []))
         }
     })
 
