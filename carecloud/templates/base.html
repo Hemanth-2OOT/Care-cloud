@@ -3,39 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CareCloud - {% block title %}{% endblock %}</title>
+    <title>CareCloud – {% block title %}{% endblock %}</title>
+
+    <!-- Main Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
+
+    <!-- 🌐 NAVBAR -->
     <nav class="navbar">
-        <div class="container">
-            <a href="/" class="logo">CareCloud ☁️</a>
-            {% if current_user.is_authenticated %}
-            <div class="nav-links">
-                <span>Welcome, {{ current_user.name }}</span>
-                <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+        <div class="container nav-inner">
+            <a href="/" class="logo">
+                ☁️ <span>CareCloud</span>
+            </a>
+
+            {% if user %}
+            <div class="nav-user">
+                <span class="welcome-text">
+                    Hi, <strong>{{ user.name }}</strong>
+                </span>
+                <a href="/logout" class="btn-logout">Logout</a>
             </div>
             {% endif %}
         </div>
     </nav>
 
-    <div class="container main-content">
+    <!-- 📦 MAIN CONTENT -->
+    <main class="container main-content">
+
+        <!-- 🔔 FLASH MESSAGES -->
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 <div class="flash-messages">
                     {% for message in messages %}
-                        <div class="flash-message">{{ message }}</div>
+                        <div class="flash-message">
+                            {{ message }}
+                        </div>
                     {% endfor %}
                 </div>
             {% endif %}
         {% endwith %}
 
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
-    <footer>
-        <p>&copy; 2024 CareCloud. Emotional support for everyone.</p>
+    <!-- 🧡 FOOTER -->
+    <footer class="footer">
+        <p>
+            💙 CareCloud — protecting emotional well-being and online safety.
+        </p>
     </footer>
+
 </body>
 </html>
