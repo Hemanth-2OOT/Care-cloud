@@ -36,12 +36,25 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     parent_email = db.Column(db.String(100), nullable=False)
+    analyses = db.relationship('Analysis', backref='user', lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class Analysis(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, server_default=db.func.now())
+    toxicity_score = db.Column(db.Integer)
+    severity_level = db.Column(db.String(20))
+    explanation = db.Column(db.Text)
+    victim_support_message = db.Column(db.Text)
+    safe_response_steps = db.Column(db.Text) # JSON string
+    labels = db.Column(db.Text) # JSON string
+    content_preview = db.Column(db.Text)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -103,7 +116,12 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html', user=current_user)
+    history = Analysis.query.filter_by(user_id=current_user.id).order_by(Analysis.timestamp.desc()).all()
+    # Process history for template
+    for h in history:
+        h.labels_list = json.loads(h.labels) if h.labels else {}
+        h.steps = json.loads(h.safe_response_steps) if h.safe_response_steps else []
+    return render_template('dashboard.html', user=current_user, history=history)
 
 def send_email_alert(parent_email, student_name, score, severity, labels=None):
     """Send detailed email alert to parent with comprehensive analysis labels."""
@@ -267,6 +285,20 @@ def analyze():
         # Ensure labels exist in response
         if 'detected_labels' not in analysis_result:
             analysis_result['detected_labels'] = {}
+
+        # Save analysis to database
+        new_analysis = Analysis(
+            user_id=current_user.id,
+            toxicity_score=analysis_result.get('toxicity_score', 0),
+            severity_level=analysis_result.get('severity_level', 'Low'),
+            explanation=analysis_result.get('explanation', ''),
+            victim_support_message=analysis_result.get('victim_support_message', ''),
+            safe_response_steps=json.dumps(analysis_result.get('safe_response_steps', [])),
+            labels=json.dumps(analysis_result.get('detected_labels', {})),
+            content_preview=text_content[:100] if text_content else "Image Analysis"
+        )
+        db.session.add(new_analysis)
+        db.session.commit()
 
         # Trigger email alert if needed (critical severity)
         if analysis_result.get('parent_alert_required', False):
