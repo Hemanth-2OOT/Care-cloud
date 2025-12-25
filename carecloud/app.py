@@ -1,8 +1,5 @@
 import os
 import json
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
@@ -23,7 +20,7 @@ import google.generativeai as genai
 load_dotenv()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "carecloud-secret-key")
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "carecloud-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", "sqlite:///database.db"
 )
@@ -42,7 +39,7 @@ def health():
 
 
 # =========================
-# GEMINI (PRO – FREE INDIA)
+# GEMINI PRO (FREE INDIA)
 # =========================
 GEMINI_API_KEY = os.getenv("AI_INTEGRATIONS_GEMINI_API_KEY")
 if not GEMINI_API_KEY:
@@ -91,49 +88,79 @@ def load_user(user_id):
 
 
 # =========================
-# NORMALIZE + FLOOR LOGIC
+# HARD SAFETY RULES (INTENT)
 # =========================
-def normalize_analysis(raw, original_text):
-    text_lower = original_text.lower()
+PROFANITY = [
+    "fuck", "shit", "bitch", "ugly", "stupid", "asshole"
+]
 
-    # Minimum toxicity floor for kids
-    profanity_words = ["fuck", "shit", "bitch", "asshole", "ugly", "stupid"]
-    insult_detected = any(w in text_lower for w in profanity_words)
+GROOMING_PATTERNS = [
+    "come sit on my lap",
+    "you are cute",
+    "you are so mature",
+    "our secret",
+    "don’t tell your parents",
+    "send me a picture",
+    "i can take care of you",
+    "i understand you better than others"
+]
 
-    base_score = int(raw.get("toxicity_score", 0))
-    if insult_detected and base_score < 60:
-        base_score = 60
 
-    severity = raw.get("severity_level", "Low")
-    if base_score >= 70:
+def detect_intent(text):
+    t = text.lower()
+    return {
+        "profanity": any(w in t for w in PROFANITY),
+        "grooming": any(p in t for p in GROOMING_PATTERNS)
+    }
+
+
+def enforce_child_safety(raw, text):
+    intent = detect_intent(text)
+    score = int(raw.get("toxicity_score", 0))
+
+    if intent["profanity"] and score < 60:
+        score = 60
+
+    if intent["grooming"] and score < 75:
+        score = 75
+
+    if score >= 70:
         severity = "High"
-    elif base_score >= 40:
+    elif score >= 40:
         severity = "Medium"
+    else:
+        severity = "Low"
+
+    labels = raw.get("detected_labels", {})
+    if intent["profanity"]:
+        labels["profanity"] = True
+    if intent["grooming"]:
+        labels["manipulation"] = True
+        labels["grooming"] = True
+        labels["sexual_content"] = True
 
     return {
-        "toxicity_score": min(base_score, 100),
+        "toxicity_score": min(score, 100),
         "severity_level": severity,
         "explanation": raw.get(
             "explanation",
-            "This content may negatively affect a child emotionally."
+            "This message may be harmful or inappropriate for a child."
         ),
         "victim_support_message": raw.get(
             "victim_support_message",
-            "You are not alone. What someone says online does not define you."
+            "This message crosses boundaries. You did nothing wrong, and it’s okay to feel uncomfortable."
         ),
         "safe_response_steps": raw.get(
             "safe_response_steps",
             [
-                "Do not reply immediately",
-                "Block or mute the sender",
-                "Talk to a trusted adult"
+                "Do not reply to the message",
+                "Block or report the sender",
+                "Tell a parent, teacher, or trusted adult",
+                "Save screenshots if needed"
             ]
         ),
-        "detected_labels": raw.get(
-            "detected_labels",
-            {}
-        ),
-        "parent_alert_required": base_score >= 70
+        "detected_labels": labels,
+        "parent_alert_required": score >= 70
     }
 
 
@@ -203,73 +230,50 @@ def dashboard():
 
 
 # =========================
-# EMAIL ALERT
-# =========================
-def send_email_alert(parent_email, student_name, score, severity, labels):
-    sender = os.getenv("MAIL_USERNAME")
-    password = os.getenv("MAIL_PASSWORD")
-    if not sender or not password:
-        return False
-
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = parent_email
-    msg["Subject"] = f"CareCloud Safety Alert – {student_name}"
-
-    body = f"""
-CareCloud detected potentially harmful content.
-
-Student: {student_name}
-Severity: {severity}
-Toxicity Score: {score}/100
-Detected Risks: {labels}
-
-Please check in with your child.
-"""
-    msg.attach(MIMEText(body, "plain"))
-
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender, password)
-        server.sendmail(sender, parent_email, msg.as_string())
-        server.quit()
-        return True
-    except Exception:
-        return False
-
-
-# =========================
-# ANALYZE (FULL INTENT AI)
+# ANALYZE ROUTE (MASTER PROMPT)
 # =========================
 @app.route("/analyze", methods=["POST"])
 @login_required
 def analyze():
     text = request.form.get("text", "").strip()
 
-    prompt = f"""
-You are a CHILD ONLINE SAFETY AI.
+    PROMPT = f"""
+You are CareCloud, an AI system built ONLY to protect CHILDREN and TEENAGERS (ages 8–17).
 
-DETECT:
-- insults, profanity, harassment
+CRITICAL RULES:
+- Assume the receiver is a minor.
+- Intent matters more than wording.
+- Polite language can still be dangerous.
+- Grooming, manipulation, secrecy, pressure, or sexual undertones MUST be flagged.
+- Be conservative. When unsure, protect the child.
+
+YOU MUST DETECT:
+- insults, humiliation, bullying
 - emotional manipulation or coercion
-- threats, violence, gore
-- sexual content or grooming
-- hate speech or self-harm encouragement
+- grooming or sexual intent
+- violence, gore, threats
+- hate speech
+- self-harm encouragement
 
-ASSUME USER IS A CHILD.
+SCORING:
+- Mild insult → 40–55
+- Profanity or humiliation → 60–70
+- Manipulation or grooming → 75–90
+- Sexual or violent threats → 90–100
 
-RETURN ONLY JSON with:
-toxicity_score (0-100),
-severity_level (Low/Medium/High),
+PARENT ALERT:
+- true if score ≥ 70
+
+RETURN ONLY VALID JSON WITH THESE EXACT KEYS:
+toxicity_score,
+severity_level,
 explanation,
 victim_support_message,
 safe_response_steps (array),
 detected_labels {{
   profanity, harassment, manipulation,
-  threat, violence, gore,
-  sexual_content, self_harm,
-  grooming, hate_speech
+  grooming, sexual_content, violence,
+  gore, hate_speech, self_harm
 }},
 parent_alert_required
 
@@ -278,13 +282,13 @@ TEXT:
 """
 
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(PROMPT)
         raw_text = response.text.strip()
         raw_text = raw_text[raw_text.find("{"): raw_text.rfind("}") + 1]
-        raw_analysis = json.loads(raw_text)
-        analysis = normalize_analysis(raw_analysis, text)
+        raw = json.loads(raw_text)
+        analysis = enforce_child_safety(raw, text)
     except Exception:
-        analysis = normalize_analysis({}, text)
+        analysis = enforce_child_safety({}, text)
 
     record = Analysis(
         user_id=current_user.id,
@@ -299,15 +303,6 @@ TEXT:
 
     db.session.add(record)
     db.session.commit()
-
-    if analysis["parent_alert_required"]:
-        send_email_alert(
-            current_user.parent_email,
-            current_user.name,
-            analysis["toxicity_score"],
-            analysis["severity_level"],
-            analysis["detected_labels"],
-        )
 
     return jsonify(analysis)
 
