@@ -99,8 +99,19 @@ function updateUI(data) {
     // Update Gauge
     const needle = document.getElementById('gaugeNeedle');
     if (needle) {
+        // Map 0-100 score to -90 to 90 degrees
         const rotation = (score * 1.8) - 90;
         needle.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+    }
+
+    // Update risk bar in results
+    const riskBar = document.getElementById('riskBar');
+    if (riskBar) {
+        riskBar.style.width = score + '%';
+        // Add color based on score
+        if (score > 70) riskBar.style.background = 'var(--risk-color)';
+        else if (score > 30) riskBar.style.background = 'var(--warning-color)';
+        else riskBar.style.background = 'var(--safe-color)';
     }
 
     // Update risk section
@@ -154,9 +165,66 @@ function updateUI(data) {
     const alertInfo = document.getElementById('alertInfo');
     if (alertInfo) alertInfo.style.display = data.parent_alert_required ? 'block' : 'none';
 
+    // Update Dynamic Support Panel
+    updateSupportPanel(data.support_panel_content);
+
     document.getElementById('resultsEmpty').style.display = 'none';
     document.getElementById('resultsContent').classList.add('active');
     document.getElementById('analyzeBtn').disabled = false;
+}
+
+function updateSupportPanel(content) {
+    if (!content) return;
+
+    const supportSummary = document.getElementById('supportSummary');
+    const studentGuidance = document.getElementById('studentGuidance');
+    const parentGuidance = document.getElementById('parentGuidance');
+    const supportNextSteps = document.getElementById('supportNextSteps');
+
+    if (supportSummary) supportSummary.textContent = content.context_summary || '';
+    if (studentGuidance) studentGuidance.textContent = content.student_guidance || '';
+    if (parentGuidance) parentGuidance.textContent = content.parent_guidance || '';
+    
+    if (supportNextSteps && Array.isArray(content.next_steps)) {
+        supportNextSteps.innerHTML = content.next_steps.map(step => `
+            <div class="support-step">
+                <h4>Recommended Action</h4>
+                <p>${step}</p>
+            </div>
+        `).join('');
+    }
+}
+
+function renderSafeResponses(steps) {
+    const list = document.getElementById('safeResponsesList');
+    if (!list) return;
+    
+    list.innerHTML = Array.isArray(steps) ? steps.map(step => `
+        <div class="response-item">${step}</div>
+    `).join('') : '';
+}
+
+function renderLabels(labels) {
+    const container = document.getElementById('labelsContainer');
+    if (!container) return;
+    
+    const labelMap = {
+        'harassment': 'Harassment',
+        'hate_speech': 'Hate Speech',
+        'threats': 'Threats',
+        'sexual_content': 'Inappropriate',
+        'emotional_abuse': 'Emotional Abuse',
+        'cyberbullying': 'Cyberbullying'
+    };
+    
+    container.innerHTML = Object.entries(labelMap).map(([key, label]) => {
+        const isDetected = labels[key] === true;
+        return `
+            <div class="label-minimal ${isDetected ? 'detected' : 'safe'}">
+                ${isDetected ? '⚠️' : '✓'} ${label}
+            </div>
+        `;
+    }).join('');
 }
 
 function showHistoryDetail(explanation) {

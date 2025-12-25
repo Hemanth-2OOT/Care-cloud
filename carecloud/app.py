@@ -248,33 +248,16 @@ def analyze():
         CRITICAL: Always include ALL these sections. Never omit any:
         - toxicity_score: 0-100 integer
         - severity_level: "Low" (0-30), "Medium" (31-60), "High" (61-85), or "Critical" (86-100)
-        - explanation: Clear explanation of WHY this content is harmful. Simple language. If safe, explain it's appropriate.
-        - victim_support_message: Empathetic reassurance if harmful. Always provide guidance & emotional safety. If safe, provide encouragement.
-        - safe_response_steps: Array of 3 step-by-step instructions on how to respond safely. If safe, provide tips for similar situations.
+        - explanation: Clear explanation of WHAT harmful content was found and WHY it is harmful. Use simple language.
+        - victim_support_message: Empathetic, non-judgmental reassurance. Address the user directly.
+        - safe_response_steps: Array of 3 step-by-step instructions on how to respond safely, specific to the content found.
         - detected_labels: Object with BOOLEAN values (true/false) for: harassment, hate_speech, threats, sexual_content, emotional_abuse, cyberbullying
         - parent_alert_required: true if toxicity_score > 70, false otherwise
-        
-        Example (High Risk):
-        {
-          "toxicity_score": 85,
-          "severity_level": "Critical",
-          "explanation": "This contains severe harassment with dehumanizing language and threats of violence directed at the recipient.",
-          "victim_support_message": "This is not okay. You don't deserve to be treated this way. Please talk to a trusted adult about what happened. You are not alone.",
-          "safe_response_steps": ["Step 1: Block this person immediately.", "Step 2: Take a screenshot for evidence.", "Step 3: Tell a trusted adult or report to the platform."],
-          "detected_labels": {"harassment": true, "hate_speech": true, "threats": true, "sexual_content": false, "emotional_abuse": true, "cyberbullying": true},
-          "parent_alert_required": true
-        }
-        
-        Example (Safe):
-        {
-          "toxicity_score": 15,
-          "severity_level": "Low",
-          "explanation": "This is appropriate communication. It shows respect and clear boundaries.",
-          "victim_support_message": "Great job communicating clearly and respectfully. Keep setting healthy boundaries in your interactions.",
-          "safe_response_steps": ["Step 1: Continue using respectful language.", "Step 2: Listen to others' perspectives.", "Step 3: Ask clarifying questions if confused."],
-          "detected_labels": {"harassment": false, "hate_speech": false, "threats": false, "sexual_content": false, "emotional_abuse": false, "cyberbullying": false},
-          "parent_alert_required": false
-        }
+        - support_panel_content: Object containing:
+            - context_summary: String explaining what was detected (e.g., "We found patterns of harassment in your text input")
+            - student_guidance: Specific advice for the student based on the detection
+            - parent_guidance: Specific advice for parents based on the detection
+            - next_steps: Array of 3 recommended actions or resources
         """
 
         # Build content for Gemini
@@ -293,17 +276,26 @@ def analyze():
             if not response or not hasattr(response, 'text') or not response.text:
                  raise Exception("AI response empty or invalid.")
             response_text = response.text.strip()
+            
+            # Try to extract JSON substring in case the model added commentary
+            first = response_text.find('{')
+            last = response_text.rfind('}')
+            if first != -1 and last != -1 and last > first:
+                response_text = response_text[first:last+1]
+            
+            analysis_result = json.loads(response_text)
+            
+            # Add fallback if support_panel_content is missing
+            if 'support_panel_content' not in analysis_result:
+                analysis_result['support_panel_content'] = {
+                    "context_summary": f"Analysis complete (Score: {analysis_result.get('toxicity_score', 0)})",
+                    "student_guidance": analysis_result.get('victim_support_message', 'Stay safe online.'),
+                    "parent_guidance": "Monitor activity and discuss safety.",
+                    "next_steps": analysis_result.get('safe_response_steps', ["Step 1: Stay calm", "Step 2: Ask for help", "Step 3: Block if needed"])[:3]
+                }
         except Exception as ai_err:
             print(f"AI Generation Error: {ai_err}")
             return jsonify({'error': f'AI Service Error: {str(ai_err)}'}), 503
-
-        # Try to extract JSON substring in case the model added commentary
-        first = response_text.find('{')
-        last = response_text.rfind('}')
-        if first != -1 and last != -1 and last > first:
-            response_text = response_text[first:last+1]
-
-        analysis_result = json.loads(response_text)
 
         # Ensure labels exist in response
         if 'detected_labels' not in analysis_result:
