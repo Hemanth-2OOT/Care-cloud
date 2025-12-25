@@ -15,13 +15,21 @@ import pytesseract
 load_dotenv()
 
 # Configure Gemini AI
-import google.generativeai as genai
-# Standard configuration
-if os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY"):
-    genai.configure(api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY"))
-else:
-    # Fallback or local testing
-    pass
+from google import genai
+from google.genai import types
+
+# Use Replit integration env vars
+api_key = os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
+base_url = os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL")
+
+# This is using Replit's AI Integrations service
+client = genai.Client(
+    api_key=api_key,
+    http_options={
+        'api_version': '',
+        'base_url': base_url
+    }
+)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this-in-prod')
@@ -276,10 +284,18 @@ def analyze():
         if ocr_text:
             content.append(f"OCR Extracted Text: {ocr_text}")
 
-        # Call Gemini AI via Replit integration
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(' '.join(content))
-        response_text = response.text.strip() if response.text else ""
+        # Call Gemini AI
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=' '.join(content)
+            )
+            if not response or not hasattr(response, 'text') or not response.text:
+                 raise Exception("AI response empty or invalid.")
+            response_text = response.text.strip()
+        except Exception as ai_err:
+            print(f"AI Generation Error: {ai_err}")
+            return jsonify({'error': f'AI Service Error: {str(ai_err)}'}), 503
 
         # Try to extract JSON substring in case the model added commentary
         first = response_text.find('{')
