@@ -1,6 +1,10 @@
 import os
 import json
+import smtplib
+import requests
 from datetime import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -13,6 +17,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 import google.generativeai as genai
+from PIL import Image
+import pytesseract
 
 # =========================
 # ENV + APP SETUP
@@ -20,6 +26,11 @@ import google.generativeai as genai
 load_dotenv()
 
 app = Flask(__name__)
+
+@app.route("/health")
+def health():
+    return "CareCloud is running", 200
+
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "carecloud-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", "sqlite:///database.db"
@@ -32,22 +43,75 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-
-@app.route("/health")
-def health():
-    return "OK", 200
-
-
 # =========================
-# GEMINI PRO (FREE INDIA)
+# GEMINI (SUPPORT + EXPLANATION)
 # =========================
 GEMINI_API_KEY = os.getenv("AI_INTEGRATIONS_GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise RuntimeError("AI_INTEGRATIONS_GEMINI_API_KEY is not set")
+    raise RuntimeError("AI_INTEGRATIONS_GEMINI_API_KEY missing")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.0-pro")
+gemini = genai.GenerativeModel("gemini-1.5-flash")
 
+# =========================
+# PERSPECTIVE API (DETECTION)
+# =========================
+PERSPECTIVE_API_KEY = os.getenv("PERSPECTIVE_API_KEY")
+PERSPECTIVE_URL = "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze"
+
+REQUESTED_ATTRIBUTES = {
+    "TOXICITY": {},
+    "SEVERE_TOXICITY": {},
+    "INSULT": {},
+    "PROFANITY": {},
+    "THREAT": {},
+    "SEXUAL_EXPLICIT": {},
+    "FLIRTATION": {},
+    "IDENTITY_ATTACK": {}
+}
+
+def perspective_analyze(text):
+    if not text.strip():
+        return {}
+
+    payload = {
+        "comment": {"text": text},
+        "languages": ["en"],
+        "requestedAttributes": REQUESTED_ATTRIBUTES
+    }
+
+    try:
+        r = requests.post(
+            f"{PERSPECTIVE_URL}?key={PERSPECTIVE_API_KEY}",
+            json=payload,
+            timeout=10
+        )
+        if r.status_code != 200:
+            return {}
+        return r.json().get("attributeScores", {})
+    except Exception:
+        return {}
+
+def compute_score(scores):
+    labels = {}
+    max_score = 0.0
+
+    for k, v in scores.items():
+        s = v["summaryScore"]["value"]
+        labels[k.lower()] = round(s, 3)
+        max_score = max(max_score, s)
+
+    toxicity = int(max_score * 100)
+
+    if toxicity >= 70:
+        severity = "High"
+    elif toxicity >= 40:
+        severity = "Medium"
+    else:
+        severity = "Low"
+
+    parent_alert = toxicity >= 70
+    return toxicity, severity, labels, parent_alert
 
 # =========================
 # DATABASE MODELS
@@ -61,12 +125,11 @@ class User(UserMixin, db.Model):
 
     analyses = db.relationship("Analysis", backref="user", lazy=True)
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+    def set_password(self, p):
+        self.password_hash = generate_password_hash(p)
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
+    def check_password(self, p):
+        return check_password_hash(self.password_hash, p)
 
 class Analysis(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -81,96 +144,16 @@ class Analysis(db.Model):
     labels = db.Column(db.Text)
     content_preview = db.Column(db.Text)
 
-
 @login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-
-# =========================
-# HARD SAFETY RULES (INTENT)
-# =========================
-PROFANITY = [
-    "fuck", "shit", "bitch", "ugly", "stupid", "asshole"
-]
-
-GROOMING_PATTERNS = [
-    "come sit on my lap",
-    "you are cute",
-    "you are so mature",
-    "our secret",
-    "don’t tell your parents",
-    "send me a picture",
-    "i can take care of you",
-    "i understand you better than others"
-]
-
-
-def detect_intent(text):
-    t = text.lower()
-    return {
-        "profanity": any(w in t for w in PROFANITY),
-        "grooming": any(p in t for p in GROOMING_PATTERNS)
-    }
-
-
-def enforce_child_safety(raw, text):
-    intent = detect_intent(text)
-    score = int(raw.get("toxicity_score", 0))
-
-    if intent["profanity"] and score < 60:
-        score = 60
-
-    if intent["grooming"] and score < 75:
-        score = 75
-
-    if score >= 70:
-        severity = "High"
-    elif score >= 40:
-        severity = "Medium"
-    else:
-        severity = "Low"
-
-    labels = raw.get("detected_labels", {})
-    if intent["profanity"]:
-        labels["profanity"] = True
-    if intent["grooming"]:
-        labels["manipulation"] = True
-        labels["grooming"] = True
-        labels["sexual_content"] = True
-
-    return {
-        "toxicity_score": min(score, 100),
-        "severity_level": severity,
-        "explanation": raw.get(
-            "explanation",
-            "This message may be harmful or inappropriate for a child."
-        ),
-        "victim_support_message": raw.get(
-            "victim_support_message",
-            "This message crosses boundaries. You did nothing wrong, and it’s okay to feel uncomfortable."
-        ),
-        "safe_response_steps": raw.get(
-            "safe_response_steps",
-            [
-                "Do not reply to the message",
-                "Block or report the sender",
-                "Tell a parent, teacher, or trusted adult",
-                "Save screenshots if needed"
-            ]
-        ),
-        "detected_labels": labels,
-        "parent_alert_required": score >= 70
-    }
-
+def load_user(uid):
+    return User.query.get(int(uid))
 
 # =========================
-# ROUTES
+# ROUTES (AUTH)
 # =========================
 @app.route("/")
 def index():
     return redirect(url_for("dashboard")) if current_user.is_authenticated else redirect(url_for("login"))
-
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
@@ -179,41 +162,37 @@ def signup():
             flash("Email already exists")
             return redirect(url_for("signup"))
 
-        user = User(
+        u = User(
             name=request.form["name"],
             email=request.form["email"],
-            parent_email=request.form["parent_email"],
+            parent_email=request.form["parent_email"]
         )
-        user.set_password(request.form["password"])
-
-        db.session.add(user)
+        u.set_password(request.form["password"])
+        db.session.add(u)
         db.session.commit()
-        login_user(user)
+        login_user(u)
         return redirect(url_for("dashboard"))
 
     return render_template("login.html", mode="signup")
 
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = User.query.filter_by(email=request.form["email"]).first()
-        if not user or not user.check_password(request.form["password"]):
+        u = User.query.filter_by(email=request.form["email"]).first()
+        if not u or not u.check_password(request.form["password"]):
             flash("Invalid credentials")
             return redirect(url_for("login"))
 
-        login_user(user)
+        login_user(u)
         return redirect(url_for("dashboard"))
 
     return render_template("login.html", mode="login")
-
 
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
     return redirect(url_for("login"))
-
 
 @app.route("/dashboard")
 @login_required
@@ -226,86 +205,142 @@ def dashboard():
         h.labels_list = json.loads(h.labels or "{}")
         h.steps = json.loads(h.safe_response_steps or "[]")
 
-    return render_template("dashboard.html", user=current_user, history=history)
-
+    return render_template("dashboard.html", history=history)
 
 # =========================
-# ANALYZE ROUTE (MASTER PROMPT)
+# EMAIL ALERT
+# =========================
+def send_email_alert(parent_email, name, score, severity, labels):
+    sender = os.getenv("MAIL_USERNAME")
+    password = os.getenv("MAIL_PASSWORD")
+    if not sender or not password:
+        return
+
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = parent_email
+    msg["Subject"] = f"CareCloud Alert – {name}"
+
+    msg.attach(MIMEText(f"""
+CareCloud detected harmful content.
+
+Severity: {severity}
+Score: {score}/100
+Detected risks: {labels}
+
+Please check in with your child.
+""", "plain"))
+
+    try:
+        s = smtplib.SMTP("smtp.gmail.com", 587)
+        s.starttls()
+        s.login(sender, password)
+        s.send_message(msg)
+        s.quit()
+    except Exception:
+        pass
+
+# =========================
+# ANALYZE ROUTE (FINAL)
 # =========================
 @app.route("/analyze", methods=["POST"])
 @login_required
 def analyze():
-    text = request.form.get("text", "").strip()
+    text = request.form.get("text", "")
+    image = request.files.get("image")
 
-    PROMPT = f"""
-You are CareCloud, an AI system built ONLY to protect CHILDREN and TEENAGERS (ages 8–17).
+    ocr = ""
+    if image:
+        try:
+            img = Image.open(image.stream).convert("RGB")
+            ocr = pytesseract.image_to_string(img).strip()
+        except Exception:
+            pass
 
-CRITICAL RULES:
-- Assume the receiver is a minor.
-- Intent matters more than wording.
-- Polite language can still be dangerous.
-- Grooming, manipulation, secrecy, pressure, or sexual undertones MUST be flagged.
-- Be conservative. When unsure, protect the child.
+    content = f"{text}\n{ocr}"
 
-YOU MUST DETECT:
-- insults, humiliation, bullying
-- emotional manipulation or coercion
-- grooming or sexual intent
-- violence, gore, threats
-- hate speech
-- self-harm encouragement
+    scores = perspective_analyze(content)
+    toxicity, severity, labels, parent_alert = compute_score(scores)
 
-SCORING:
-- Mild insult → 40–55
-- Profanity or humiliation → 60–70
-- Manipulation or grooming → 75–90
-- Sexual or violent threats → 90–100
+    # AI explanation + support
+    prompt = f"""
+You are a CHILD ONLINE SAFETY ASSISTANT.
 
-PARENT ALERT:
-- true if score ≥ 70
+Message received:
+\"\"\"{content}\"\"\"
 
-RETURN ONLY VALID JSON WITH THESE EXACT KEYS:
-toxicity_score,
-severity_level,
+Detected risk labels:
+{labels}
+
+Tasks:
+1. Explain clearly WHY this message is harmful to a child.
+2. Give a short emotional support message to the child.
+3. Give 3–5 simple steps the child should follow.
+4. Give a 1–2 line safety summary.
+
+Rules:
+- Speak gently and clearly.
+- Do NOT shame the child.
+- Assume child age 8–16.
+- Be specific to THIS message.
+
+Return ONLY valid JSON with keys:
 explanation,
-victim_support_message,
-safe_response_steps (array),
-detected_labels {{
-  profanity, harassment, manipulation,
-  grooming, sexual_content, violence,
-  gore, hate_speech, self_harm
-}},
-parent_alert_required
-
-TEXT:
-{text}
+support_message,
+steps (array),
+summary
 """
 
     try:
-        response = model.generate_content(PROMPT)
-        raw_text = response.text.strip()
-        raw_text = raw_text[raw_text.find("{"): raw_text.rfind("}") + 1]
-        raw = json.loads(raw_text)
-        analysis = enforce_child_safety(raw, text)
+        r = gemini.generate_content(prompt)
+        raw = r.text.strip()
+        start, end = raw.find("{"), raw.rfind("}")
+        ai = json.loads(raw[start:end + 1])
     except Exception:
-        analysis = enforce_child_safety({}, text)
+        ai = {
+            "explanation": "This message contains unsafe language that can hurt or scare someone.",
+            "support_message": "You did nothing wrong. You deserve to feel safe.",
+            "steps": [
+                "Do not reply to the message",
+                "Block or report the sender",
+                "Tell a trusted adult"
+            ],
+            "summary": "This content is unsafe and should not be ignored."
+        }
 
     record = Analysis(
         user_id=current_user.id,
-        toxicity_score=analysis["toxicity_score"],
-        severity_level=analysis["severity_level"],
-        explanation=analysis["explanation"],
-        victim_support_message=analysis["victim_support_message"],
-        safe_response_steps=json.dumps(analysis["safe_response_steps"]),
-        labels=json.dumps(analysis["detected_labels"]),
-        content_preview=text[:100],
+        toxicity_score=toxicity,
+        severity_level=severity,
+        explanation=ai["explanation"],
+        victim_support_message=ai["support_message"],
+        safe_response_steps=json.dumps(ai["steps"]),
+        labels=json.dumps(labels),
+        content_preview=text[:100]
     )
 
     db.session.add(record)
     db.session.commit()
 
-    return jsonify(analysis)
+    if parent_alert:
+        send_email_alert(
+            current_user.parent_email,
+            current_user.name,
+            toxicity,
+            severity,
+            labels
+        )
 
+    return jsonify({
+        "toxicity_score": toxicity,
+        "severity_level": severity,
+        "explanation": ai["explanation"],
+        "victim_support_message": ai["support_message"],
+        "safe_response_steps": ai["steps"],
+        "detected_labels": labels,
+        "summary": ai["summary"],
+        "parent_alert_required": parent_alert
+    })
 
 # =========================
 # RUN
