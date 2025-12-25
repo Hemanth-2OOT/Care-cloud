@@ -21,6 +21,20 @@
     <div class="dashboard-layout">
         <!-- Main Action Card -->
         <div class="action-card">
+            <!-- Toxicity Meter Gauge -->
+            <div class="meter-container">
+                <div class="gauge-wrapper">
+                    <div class="gauge-background"></div>
+                    <div class="gauge-needle" id="gaugeNeedle"></div>
+                    <div class="gauge-center"></div>
+                </div>
+                <div class="gauge-labels">
+                    <span>Safe</span>
+                    <span>Moderate</span>
+                    <span>High</span>
+                </div>
+            </div>
+
             <div class="card-header">
                 <h2>Analyze Content</h2>
                 <p class="card-subtitle">Submit text or image for safety analysis</p>
@@ -128,8 +142,59 @@
             <div class="agent-insights">
                 <h4>Recent Insights</h4>
                 <div id="insightsPanel" class="insights-list">
-                    <p class="text-muted">No recent analysis</p>
+                    {% if history %}
+                        {% for item in history %}
+                        <div class="history-item" onclick="showHistoryDetail('{{ item.explanation|replace("'", "\\'") }}')">
+                            <div class="history-info">
+                                <span class="history-preview">{{ item.content_preview }}</span>
+                                <div class="history-meta">
+                                    <span>{{ item.timestamp.strftime('%H:%M') }}</span>
+                                    <span class="severity-badge severity-{{ item.severity_level.lower() }}">{{ item.severity_level }}</span>
+                                </div>
+                            </div>
+                            <div class="history-score">{{ item.toxicity_score }}%</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No recent analysis</p>
+                    {% endif %}
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Support Panel -->
+    <div class="support-panel">
+        <h3><span class="icon">💙</span> Support & Guidance</h3>
+        <div class="support-content">
+            <p>Remember: You are not alone. CareCloud is here to help you navigate online spaces safely. If you encounter something that makes you feel uncomfortable, take a deep breath—it's okay to ask for help.</p>
+            
+            <div class="support-steps">
+                <div class="support-step">
+                    <h4>For Students</h4>
+                    <p>If you're upset, talk to a trusted adult. It's okay to step away from the screen for a while.</p>
+                </div>
+                <div class="support-step">
+                    <h4>For Parents</h4>
+                    <p>Use these insights as a starting point for a supportive, non-judgmental conversation about online safety.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reason Modal -->
+<div id="reasonModal" class="modal">
+    <div class="modal-content">
+        <button class="close-modal" onclick="closeReasonModal()">&times;</button>
+        <div class="modal-header">
+            <h2>Analysis Explanation</h2>
+        </div>
+        <div id="modalBody" class="modal-body">
+            <p id="modalExplanation"></p>
+            <div class="analysis-summary" style="margin-top: 1.5rem;">
+                <h3>Why was this flagged?</h3>
+                <p>Our AI detected patterns in the content that match common safety concerns. This explanation is meant to help you understand the context and stay safe.</p>
             </div>
         </div>
     </div>

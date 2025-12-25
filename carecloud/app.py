@@ -14,9 +14,8 @@ import pytesseract
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini AI using Replit integration
+# Configure Gemini AI
 import google.generativeai as genai
-
 genai.configure(api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY", ""))
 
 app = Flask(__name__)
@@ -55,6 +54,9 @@ class Analysis(db.Model):
     safe_response_steps = db.Column(db.Text) # JSON string
     labels = db.Column(db.Text) # JSON string
     content_preview = db.Column(db.Text)
+
+    def __init__(self, **kwargs):
+        super(Analysis, self).__init__(**kwargs)
 
 @login_manager.user_loader
 def load_user(user_id):

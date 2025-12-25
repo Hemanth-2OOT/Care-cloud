@@ -75,154 +75,125 @@ function showIdleState() {
 function updateUI(data) {
     const score = data.toxicity_score || 0;
     const severity = data.severity_level || 'Unknown';
-    const isRisk = score > 70;
+    
+    // Update Gauge
+    const needle = document.getElementById('gaugeNeedle');
+    if (needle) {
+        const rotation = (score * 1.8) - 90;
+        needle.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+    }
 
     // Update risk section
-    document.getElementById('riskScore').textContent = score;
+    const riskScore = document.getElementById('riskScore');
+    if (riskScore) riskScore.textContent = score;
     
     const riskStatus = document.getElementById('riskStatus');
-    riskStatus.textContent = severity;
-    riskStatus.className = 'risk-status ' + (isRisk ? 'risk' : 'safe');
-
-    // Update risk bar color
-    const riskBar = document.getElementById('riskBar');
-    riskBar.style.width = Math.min(score, 100) + '%';
-    
-    if (score <= 30) {
-        riskBar.style.background = 'linear-gradient(90deg, #10b981, #14b8a6)';
-    } else if (score <= 60) {
-        riskBar.style.background = 'linear-gradient(90deg, #f59e0b, #ec4899)';
-    } else {
-        riskBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+    if (riskStatus) {
+        riskStatus.textContent = severity;
+        riskStatus.className = 'risk-status ' + (score > 60 ? 'risk' : (score > 30 ? 'warning' : 'safe'));
     }
 
     // Update state display
-    if (isRisk) {
-        document.getElementById('idleState').style.display = 'none';
-        document.getElementById('analyzingState').style.display = 'none';
-        document.getElementById('safeState').style.display = 'none';
-        document.getElementById('riskState').style.display = 'block';
+    const safeState = document.getElementById('safeState');
+    const riskState = document.getElementById('riskState');
+    const idleState = document.getElementById('idleState');
+    const analyzingState = document.getElementById('analyzingState');
+
+    if (idleState) idleState.style.display = 'none';
+    if (analyzingState) analyzingState.style.display = 'none';
+
+    if (score > 60) {
+        if (safeState) safeState.style.display = 'none';
+        if (riskState) riskState.style.display = 'block';
     } else {
-        document.getElementById('idleState').style.display = 'none';
-        document.getElementById('analyzingState').style.display = 'none';
-        document.getElementById('safeState').style.display = 'block';
-        document.getElementById('riskState').style.display = 'none';
+        if (safeState) safeState.style.display = 'block';
+        if (riskState) riskState.style.display = 'none';
     }
 
     // Update analysis explanation
-    document.getElementById('explanationText').textContent = data.explanation || 'Analysis completed.';
+    const expText = document.getElementById('explanationText');
+    if (expText) expText.textContent = data.explanation || 'Analysis completed.';
 
     // Render detection labels
     renderLabels(data.detected_labels || {});
 
-    // Update victim support section (ALWAYS show)
+    // Update sections
     const victimSection = document.getElementById('victimSupportSection');
-    if (data.victim_support_message) {
-        document.getElementById('victimSupportText').textContent = data.victim_support_message;
+    const victimText = document.getElementById('victimSupportText');
+    if (data.victim_support_message && victimSection && victimText) {
+        victimText.textContent = data.victim_support_message;
         victimSection.style.display = 'block';
-    } else {
-        victimSection.style.display = 'none';
     }
 
-    // Update safe response steps section (ALWAYS show)
     const responsesSection = document.getElementById('safeResponsesSection');
-    if (data.safe_response_steps && Array.isArray(data.safe_response_steps)) {
+    if (data.safe_response_steps && Array.isArray(data.safe_response_steps) && responsesSection) {
         renderSafeResponses(data.safe_response_steps);
         responsesSection.style.display = 'block';
-    } else if (data.suggested_safe_responses && Array.isArray(data.suggested_safe_responses)) {
-        // Fallback for old format
-        renderSafeResponses(data.suggested_safe_responses);
-        responsesSection.style.display = 'block';
-    } else {
-        responsesSection.style.display = 'none';
     }
 
-    // Show/hide parent alert
-    if (data.parent_alert_required) {
-        document.getElementById('alertInfo').style.display = 'block';
-    } else {
-        document.getElementById('alertInfo').style.display = 'none';
-    }
+    const alertInfo = document.getElementById('alertInfo');
+    if (alertInfo) alertInfo.style.display = data.parent_alert_required ? 'block' : 'none';
 
-    // Show results
     document.getElementById('resultsEmpty').style.display = 'none';
     document.getElementById('resultsContent').classList.add('active');
-    
     document.getElementById('analyzeBtn').disabled = false;
 }
 
-// Render suggested safe responses
-function renderSafeResponses(responses) {
-    const container = document.getElementById('safeResponsesList');
-    container.innerHTML = '';
-    
-    responses.forEach(response => {
-        const item = document.createElement('div');
-        item.className = 'response-item';
-        item.textContent = response;
-        container.appendChild(item);
-    });
+function showHistoryDetail(explanation) {
+    const modal = document.getElementById('reasonModal');
+    const text = document.getElementById('modalExplanation');
+    if (modal && text) {
+        text.textContent = explanation;
+        modal.classList.add('active');
+    }
 }
 
-// Render minimal detection labels
-function renderLabels(labels) {
-    const container = document.getElementById('labelsContainer');
-    container.innerHTML = '';
+function closeReasonModal() {
+    const modal = document.getElementById('reasonModal');
+    if (modal) modal.classList.remove('active');
+}
 
-    const labelConfig = {
-        harassment: 'Harassment',
-        hate_speech: 'Hate Speech',
-        threats: 'Threats',
-        sexual_content: 'Inappropriate',
-        emotional_abuse: 'Abuse',
-        cyberbullying: 'Cyberbullying'
-    };
-
-    for (const [key, label] of Object.entries(labelConfig)) {
-        const detected = labels[key] || false;
-        const chip = document.createElement('div');
-        chip.className = `label-minimal ${detected ? 'detected' : 'safe'}`;
-        chip.textContent = label;
-        container.appendChild(chip);
+// Update insights panel
+function updateInsightsPanel() {
+    const panel = document.getElementById('insightsPanel');
+    if (!panel) return;
+    
+    if (analysisHistory.length === 0) {
+        return;
     }
+
+    const newHtml = analysisHistory.map(item => `
+        <div class="history-item" onclick="showHistoryDetail('${item.explanation.replace(/'/g, "\\'")}')">
+            <div class="history-info">
+                <span class="history-preview">${item.text}</span>
+                <div class="history-meta">
+                    <span>${item.time}</span>
+                    <span class="severity-badge severity-${item.severity.toLowerCase()}">${item.severity}</span>
+                </div>
+            </div>
+            <div class="history-score">${item.score}%</div>
+        </div>
+    `).join('');
+    
+    panel.innerHTML = newHtml + panel.innerHTML;
 }
 
 // Add analysis to history
 function addToHistory(text, data) {
     const summary = text.substring(0, 40) + (text.length > 40 ? '...' : '');
     const severity = data.severity_level || 'Unknown';
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     analysisHistory.unshift({
-        text: summary,
+        text: summary || 'Image Analysis',
         severity: severity,
         score: data.toxicity_score,
-        time: timestamp
+        time: timestamp,
+        explanation: data.explanation
     });
 
-    // Keep only last 5 analyses
-    if (analysisHistory.length > 5) {
-        analysisHistory.pop();
-    }
-
+    if (analysisHistory.length > 5) analysisHistory.pop();
     updateInsightsPanel();
-}
-
-// Update insights panel
-function updateInsightsPanel() {
-    const panel = document.getElementById('insightsPanel');
-    
-    if (analysisHistory.length === 0) {
-        panel.innerHTML = '<p class="text-muted">No recent analysis</p>';
-        return;
-    }
-
-    panel.innerHTML = analysisHistory.map(item => `
-        <div class="insight-item">
-            <strong>${item.time}</strong> - ${item.severity} (${item.score}/100)<br>
-            <em>${item.text}</em>
-        </div>
-    `).join('');
 }
 
 // Initialize
