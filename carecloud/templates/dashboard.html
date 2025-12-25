@@ -13,7 +13,6 @@
         <p class="status-label">Protecting you in real time</p>
       </div>
     </div>
-
     <div class="user-info">
       <span class="user-name">
         {{ user.name if user is defined and user.name else 'User' }}
@@ -26,7 +25,7 @@
     <!-- LEFT PANEL -->
     <div class="action-card">
 
-      <!-- GAUGE -->
+      <!-- TOXICITY GAUGE -->
       <div class="meter-container">
         <div class="gauge-wrapper">
           <div class="gauge-background"></div>
@@ -45,25 +44,29 @@
         Paste any message or upload a screenshot. CareCloud will protect you.
       </p>
 
-      <!-- ANALYSIS FORM -->
+      <!-- FORM -->
       <form id="analyzeForm" enctype="multipart/form-data">
 
-        <label>Text / Message</label>
-        <textarea
-          id="text_content"
-          name="text"
-          placeholder="Paste messages, comments, or anything that feels uncomfortable…"
-          rows="5"
-        ></textarea>
+        <div class="input-group">
+          <label>Text / Message</label>
+          <textarea
+            id="text_content"
+            name="text"
+            placeholder="Paste messages, comments, or anything that feels uncomfortable…"
+            rows="5"
+          ></textarea>
+        </div>
 
-        <label>Screenshot (optional)</label>
-        <input
-          type="file"
-          id="image_file"
-          name="image"
-          accept="image/*"
-          class="input-file"
-        >
+        <div class="input-group">
+          <label>Screenshot (optional)</label>
+          <input
+            type="file"
+            id="image_file"
+            name="image"
+            accept="image/*"
+            class="input-file"
+          >
+        </div>
 
         <button
           type="submit"
@@ -95,11 +98,11 @@
     <!-- RIGHT PANEL -->
     <div class="results-panel">
 
-      <div id="resultsEmpty">
+      <div id="resultsEmpty" class="results-empty">
         <p>Your analysis results will appear here</p>
       </div>
 
-      <div id="resultsContent" style="display:none">
+      <div id="resultsContent" class="results-content">
 
         <!-- SCORE -->
         <div class="risk-section">
@@ -107,8 +110,8 @@
             <div class="risk-bar" id="riskBar"></div>
           </div>
           <div class="risk-labels">
-            <span id="riskScore">0%</span>
-            <span id="riskStatus">Safe</span>
+            <span class="risk-value" id="riskScore">0%</span>
+            <span class="risk-status" id="riskStatus">Safe</span>
           </div>
         </div>
 
