@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block title %}
 {{ 'Login' if mode == 'login' else 'Sign Up' }} | CareCloud
 {% endblock %}
@@ -18,7 +17,6 @@
          else 'Join CareCloud for a safer, kinder online experience' }}
     </p>
 
-    <!-- Flash messages -->
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <div class="flash-messages">
@@ -32,57 +30,31 @@
     <form
       method="POST"
       action="{{ url_for('login') if mode == 'login' else url_for('signup') }}"
-      novalidate
     >
 
       {% if mode == 'signup' %}
       <div class="form-group">
-        <label for="name">Full Name</label>
-        <input
-          type="text"
-          id="name"
-          name="name"
-          placeholder="John Doe"
-          required
-        >
+        <label>Full Name</label>
+        <input type="text" name="name" required>
       </div>
       {% endif %}
 
       <div class="form-group">
-        <label for="email">Email Address</label>
-        <input
-          type="email"
-          id="email"
-          name="email"
-          placeholder="you@example.com"
-          required
-        >
+        <label>Email</label>
+        <input type="email" name="email" required>
       </div>
 
       <div class="form-group">
-        <label for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          name="password"
-          placeholder="••••••••"
-          minlength="6"
-          required
-        >
+        <label>Password</label>
+        <input type="password" name="password" required minlength="6">
       </div>
 
       {% if mode == 'signup' %}
       <div class="form-group">
-        <label for="parent_email">Parent / Guardian Email</label>
-        <input
-          type="email"
-          id="parent_email"
-          name="parent_email"
-          placeholder="parent@example.com"
-          required
-        >
+        <label>Parent / Guardian Email</label>
+        <input type="email" name="parent_email" required>
         <small class="hint">
-          Used only if serious harmful content is detected.
+          Used only for serious safety alerts.
         </small>
       </div>
       {% endif %}
@@ -94,15 +66,9 @@
 
     <div class="auth-footer">
       {% if mode == 'login' %}
-        <p>
-          Don’t have an account?
-          <a href="{{ url_for('signup') }}">Sign up</a>
-        </p>
+        <p>Don’t have an account? <a href="{{ url_for('signup') }}">Sign up</a></p>
       {% else %}
-        <p>
-          Already have an account?
-          <a href="{{ url_for('login') }}">Login</a>
-        </p>
+        <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
       {% endif %}
     </div>
 
