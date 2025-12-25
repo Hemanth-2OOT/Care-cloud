@@ -242,40 +242,7 @@ function renderHistory() {
                 <span class="history-severity ${item.severity_level}">${item.severity_level} Risk</span>
                 <span class="history-labels">${labels}</span>
             </div>
-            <button class="history-btn" onclick="showReason(${index})">Why?</button>
         `;
         list.appendChild(li);
     });
 }
-
-function showReason(index) {
-    const item = analysisHistory[index];
-    if (!item) return;
-
-    const modal = document.getElementById("reasonModal");
-    const explanation = document.getElementById("modalExplanationText");
-    const support = document.getElementById("modalSupportText");
-
-    if (explanation) explanation.textContent = item.explanation || "No explanation provided.";
-    if (support) support.textContent = item.victim_support_message || "Reach out to a trusted adult.";
-
-    if (modal) modal.style.display = "block";
-}
-
-// Modal Listeners
-document.addEventListener("DOMContentLoaded", () => {
-    const modal = document.getElementById("reasonModal");
-    const span = document.querySelector(".close-modal");
-
-    if (span && modal) {
-        span.onclick = function() {
-            modal.style.display = "none";
-        }
-    }
-
-    window.onclick = function(event) {
-        if (modal && event.target == modal) {
-            modal.style.display = "none";
-        }
-    }
-});

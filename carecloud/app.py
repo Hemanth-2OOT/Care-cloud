@@ -43,28 +43,72 @@ def logged_in():
     return "user" in session
 
 
-def default_gemini_response():
+def local_analyze(text):
+    text = text.lower()
+
+    labels = {
+        "harassment": False,
+        "threats": False,
+        "sexual_content": False,
+        "grooming": False,
+        "manipulation": False,
+        "emotional_abuse": False,
+        "hate_speech": False,
+        "violence": False,
+        "self_harm_risk": False
+    }
+
+    score = 10
+    explanation = "This content appears safe."
+    support = "Everything looks okay. Stay safe!"
+    steps = ["Continue being positive online."]
+    guidance = "No action needed."
+
+    # Logic
+    if any(w in text for w in ["die", "kill myself", "suicide", "end it"]):
+        labels["self_harm_risk"] = True
+        labels["emotional_abuse"] = True
+        score = 95
+        explanation = "This message indicates a risk of self-harm."
+        support = "You are precious. Please call a helpline or talk to an adult immediately."
+        steps = ["Call 988 or a local helpline", "Talk to a parent now", "Do not be alone"]
+        guidance = "Immediate intervention required. Support the child."
+
+    elif any(w in text for w in ["kill you", "punch", "hurt", "beat", "gun", "knife", "die"]):
+        labels["violence"] = True
+        labels["threats"] = True
+        score = 90
+        explanation = "This message contains threats of violence."
+        support = "This is not okay. You have the right to be safe."
+        steps = ["Block the user", "Report to platform", "Tell an adult"]
+        guidance = "Assess safety. Report threats to authorities if serious."
+
+    elif any(w in text for w in ["hate", "ugly", "stupid", "idiot", "fat", "loser"]):
+        labels["hate_speech"] = True
+        labels["harassment"] = True
+        labels["emotional_abuse"] = True
+        score = 75
+        explanation = "This message contains insults and hate speech."
+        support = "Their words reflect them, not you. You are worthy."
+        steps = ["Ignore the message", "Block the sender", "Talk to a friend"]
+        guidance = "Discuss how to handle bullies. Reassure the child."
+
+    elif any(w in text for w in ["sex", "nude", "send pic"]):
+        labels["sexual_content"] = True
+        labels["grooming"] = True
+        score = 85
+        explanation = "This message contains inappropriate sexual content."
+        support = "This is not appropriate. You don't have to respond."
+        steps = ["Block immediately", "Do not share photos", "Tell an adult"]
+        guidance = "Check for grooming signs. Report user."
+
     return {
-        "gemini_score": 60,
-        "detected_labels": {
-            "harassment": True,
-            "threats": False,
-            "sexual_content": False,
-            "grooming": False,
-            "manipulation": False,
-            "emotional_abuse": True,
-            "hate_speech": False,
-            "violence": False,
-            "self_harm_risk": False
-        },
-        "why_harmful": "This message contains abusive or harmful language that can emotionally hurt a child.",
-        "victim_support": "You are not weak for feeling affected. Hurtful words can be painful. You did the right thing by checking.",
-        "safety_steps": [
-            "Do not reply to the sender",
-            "Block or mute the person",
-            "Talk to a trusted adult"
-        ],
-        "parent_guidance": "Stay calm and supportive. Focus on emotional safety, not punishment."
+        "gemini_score": score,
+        "detected_labels": labels,
+        "why_harmful": explanation,
+        "victim_support": support,
+        "safety_steps": steps,
+        "parent_guidance": guidance
     }
 
 
@@ -262,7 +306,7 @@ def analyze():
     try:
         gemini_data = gemini_analyze(text)
     except Exception:
-        gemini_data = default_gemini_response()
+        gemini_data = local_analyze(text)
 
     final_score = max(
         perspective.get("toxicity", 0),
