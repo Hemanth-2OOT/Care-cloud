@@ -42,7 +42,7 @@ login_manager.init_app(app)
 login_manager.login_view = "login"
 
 # =========================
-# GEMINI SETUP
+# GEMINI PRO SETUP
 # =========================
 GEMINI_API_KEY = os.getenv("AI_INTEGRATIONS_GEMINI_API_KEY")
 
@@ -50,7 +50,7 @@ if not GEMINI_API_KEY:
     raise RuntimeError("AI_INTEGRATIONS_GEMINI_API_KEY is not set")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-pro")
 
 # =========================
 # DATABASE MODELS
@@ -176,8 +176,10 @@ Harmful content detected.
 
 Student: {student_name}
 Severity: {severity}
-Score: {score}/100
+Toxicity Score: {score}/100
 Labels: {labels}
+
+Please check in with your child and provide support.
 """
     msg.attach(MIMEText(body, "plain"))
 
@@ -192,7 +194,7 @@ Labels: {labels}
         return False
 
 # =========================
-# ANALYZE ROUTE (FIXED)
+# ANALYZE ROUTE
 # =========================
 @app.route("/analyze", methods=["POST"])
 @login_required
@@ -215,42 +217,39 @@ def analyze():
     prompt = f"""
 You are a cyberbullying detection system for children and teenagers.
 
-RULES (VERY IMPORTANT):
-- ANY insult, profanity, harassment, humiliation, or abusive language
-  MUST be treated as cyberbullying.
-- Phrases like "fuck you", "you are ugly", "you are stupid",
-  even if short, are NOT safe.
+STRICT RULES:
+- Any insult, profanity, harassment, humiliation, or abuse is cyberbullying.
+- Even short phrases like "fuck you", "you are ugly" are harmful.
 - Do NOT be lenient.
-- Do NOT normalize abuse.
 - Assume the victim is emotionally vulnerable.
 
-SCORING RULES:
-- Profanity or direct insult → toxicity_score >= 60
-- Repeated insults → toxicity_score >= 75
-- Threats or hate speech → toxicity_score >= 90
+SCORING:
+- Insult / profanity → toxicity_score >= 60
+- Repeated abuse → >= 75
+- Threats / self-harm encouragement → >= 90
 
-SEVERITY LEVELS:
-- 0–30  → Low
+SEVERITY:
+- 0–30 → Low
 - 31–60 → Medium
 - 61–100 → High
 
-PARENT ALERT RULE:
+PARENT ALERT:
 - parent_alert_required = true if toxicity_score >= 70
 
-TEXT TO ANALYZE:
+TEXT:
 {text}
 
-OCR TEXT (if any):
+OCR TEXT:
 {ocr_text}
 
 Return ONLY valid JSON with EXACT keys:
-toxicity_score (number 0-100),
-severity_level (Low/Medium/High),
-explanation (string),
-victim_support_message (empathetic, supportive),
-safe_response_steps (array of short steps),
-detected_labels (object with true/false flags),
-parent_alert_required (true/false)
+toxicity_score,
+severity_level,
+explanation,
+victim_support_message,
+safe_response_steps,
+detected_labels,
+parent_alert_required
 """
 
     try:
@@ -259,16 +258,24 @@ parent_alert_required (true/false)
 
         start = raw.find("{")
         end = raw.rfind("}")
-        analysis = json.loads(raw[start:end+1])
+        if start == -1 or end == -1:
+            raise ValueError("Invalid JSON")
+
+        analysis = json.loads(raw[start:end + 1])
 
     except Exception:
         analysis = {
             "toxicity_score": 0,
             "severity_level": "Low",
             "explanation": "Analysis failed",
-            "victim_support_message": "Stay safe",
+            "victim_support_message": "You are not alone. Stay safe.",
             "safe_response_steps": [],
-            "detected_labels": {},
+            "detected_labels": {
+                "insult": False,
+                "harassment": False,
+                "profanity": False,
+                "threat": False,
+            },
             "parent_alert_required": False,
         }
 
