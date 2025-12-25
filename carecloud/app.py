@@ -213,22 +213,44 @@ def analyze():
             ocr_text = ""
 
     prompt = f"""
-Return ONLY valid JSON.
+You are a cyberbullying detection system for children and teenagers.
 
-Text:
+RULES (VERY IMPORTANT):
+- ANY insult, profanity, harassment, humiliation, or abusive language
+  MUST be treated as cyberbullying.
+- Phrases like "fuck you", "you are ugly", "you are stupid",
+  even if short, are NOT safe.
+- Do NOT be lenient.
+- Do NOT normalize abuse.
+- Assume the victim is emotionally vulnerable.
+
+SCORING RULES:
+- Profanity or direct insult → toxicity_score >= 60
+- Repeated insults → toxicity_score >= 75
+- Threats or hate speech → toxicity_score >= 90
+
+SEVERITY LEVELS:
+- 0–30  → Low
+- 31–60 → Medium
+- 61–100 → High
+
+PARENT ALERT RULE:
+- parent_alert_required = true if toxicity_score >= 70
+
+TEXT TO ANALYZE:
 {text}
 
-OCR:
+OCR TEXT (if any):
 {ocr_text}
 
-Required keys:
-toxicity_score,
-severity_level,
-explanation,
-victim_support_message,
-safe_response_steps,
-detected_labels,
-parent_alert_required
+Return ONLY valid JSON with EXACT keys:
+toxicity_score (number 0-100),
+severity_level (Low/Medium/High),
+explanation (string),
+victim_support_message (empathetic, supportive),
+safe_response_steps (array of short steps),
+detected_labels (object with true/false flags),
+parent_alert_required (true/false)
 """
 
     try:
