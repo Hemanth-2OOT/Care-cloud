@@ -7,3 +7,4 @@ werkzeug
 gunicorn
 pillow
 pytesseract
+requests
