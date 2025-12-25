@@ -16,7 +16,12 @@ load_dotenv()
 
 # Configure Gemini AI
 import google.generativeai as genai
-genai.configure(api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY", ""))
+# Standard configuration
+if os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY"):
+    genai.configure(api_key=os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY"))
+else:
+    # Fallback or local testing
+    pass
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'carecloud-secret-key-change-this-in-prod')

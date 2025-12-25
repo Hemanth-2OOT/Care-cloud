@@ -2,73 +2,93 @@
 const analysisHistory = [];
 
 // Form submission handler
-document.getElementById('analyzeForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
+document.addEventListener('DOMContentLoaded', function() {
+    const analyzeForm = document.getElementById('analyzeForm');
+    if (analyzeForm) {
+        analyzeForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
 
-    const textContent = document.getElementById('text_content').value;
-    const imageFile = document.getElementById('image_file').files[0];
+            const textContent = document.getElementById('text_content').value;
+            const imageFile = document.getElementById('image_file').files[0];
 
-    if (!textContent.trim() && !imageFile) {
-        alert('Please enter some text or upload an image to analyze.');
-        return;
-    }
+            if (!textContent.trim() && !imageFile) {
+                alert('Please enter some text or upload an image to analyze.');
+                return;
+            }
 
-    // Show analyzing state
-    showAnalyzingState();
+            // Show analyzing state
+            showAnalyzingState();
 
-    try {
-        const formData = new FormData();
-        formData.append('text', textContent);
-        if (imageFile) {
-            formData.append('image', imageFile);
-        }
+            try {
+                const formData = new FormData();
+                formData.append('text', textContent);
+                if (imageFile) {
+                    formData.append('image', imageFile);
+                }
 
-        const response = await fetch('/analyze', {
-            method: 'POST',
-            body: formData,
+                console.log('Sending analysis request...');
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Server error');
+                }
+
+                const data = await response.json();
+                console.log('Analysis data received:', data);
+
+                updateUI(data);
+                addToHistory(textContent, data);
+
+            } catch (error) {
+                console.error('Analysis Error:', error);
+                alert('Analysis failed: ' + error.message);
+                showIdleState();
+            }
         });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            updateUI(data);
-            addToHistory(textContent, data);
-        } else {
-            alert('Error: ' + (data.error || 'Something went wrong'));
-            showIdleState();
-        }
-
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Failed to connect to the server.');
-        showIdleState();
     }
+    showIdleState();
 });
 
 // Show analyzing state
 function showAnalyzingState() {
-    document.getElementById('idleState').style.display = 'none';
-    document.getElementById('analyzingState').style.display = 'block';
-    document.getElementById('safeState').style.display = 'none';
-    document.getElementById('riskState').style.display = 'none';
-    
-    document.getElementById('resultsEmpty').style.display = 'none';
-    document.getElementById('resultsContent').classList.remove('active');
-    
-    document.getElementById('analyzeBtn').disabled = true;
+    const idle = document.getElementById('idleState');
+    const analyzing = document.getElementById('analyzingState');
+    const safe = document.getElementById('safeState');
+    const risk = document.getElementById('riskState');
+    const empty = document.getElementById('resultsEmpty');
+    const content = document.getElementById('resultsContent');
+    const btn = document.getElementById('analyzeBtn');
+
+    if (idle) idle.style.display = 'none';
+    if (analyzing) analyzing.style.display = 'block';
+    if (safe) safe.style.display = 'none';
+    if (risk) risk.style.display = 'none';
+    if (empty) empty.style.display = 'none';
+    if (content) content.classList.remove('active');
+    if (btn) btn.disabled = true;
 }
 
 // Show idle state
 function showIdleState() {
-    document.getElementById('idleState').style.display = 'block';
-    document.getElementById('analyzingState').style.display = 'none';
-    document.getElementById('safeState').style.display = 'none';
-    document.getElementById('riskState').style.display = 'none';
-    
-    document.getElementById('resultsEmpty').style.display = 'block';
-    document.getElementById('resultsContent').classList.remove('active');
-    
-    document.getElementById('analyzeBtn').disabled = false;
+    const idle = document.getElementById('idleState');
+    const analyzing = document.getElementById('analyzingState');
+    const safe = document.getElementById('safeState');
+    const risk = document.getElementById('riskState');
+    const empty = document.getElementById('resultsEmpty');
+    const content = document.getElementById('resultsContent');
+    const btn = document.getElementById('analyzeBtn');
+
+    if (idle) idle.style.display = 'block';
+    if (analyzing) analyzing.style.display = 'none';
+    if (safe) safe.style.display = 'none';
+    if (risk) risk.style.display = 'none';
+    if (empty) empty.style.display = 'block';
+    if (content) content.classList.remove('active');
+    if (btn) btn.disabled = false;
 }
 
 // Show analysis state
@@ -197,6 +217,6 @@ function addToHistory(text, data) {
 }
 
 // Initialize
-window.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function() {
     showIdleState();
 });

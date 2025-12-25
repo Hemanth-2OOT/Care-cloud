@@ -144,7 +144,7 @@
                 <div id="insightsPanel" class="insights-list">
                     {% if history %}
                         {% for item in history %}
-                        <div class="history-item" onclick="showHistoryDetail('{{ item.explanation|replace("'", "\\'") }}')">
+                        <div class="history-item" onclick="showHistoryDetail('{{ item.explanation | replace('\\', '\\\\') | replace('\'', '\\\'') | replace('\"', '\\\"') | replace('\n', ' ') | replace('\r', ' ') }}')">
                             <div class="history-info">
                                 <span class="history-preview">{{ item.content_preview }}</span>
                                 <div class="history-meta">
