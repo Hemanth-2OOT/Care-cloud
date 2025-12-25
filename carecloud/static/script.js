@@ -92,7 +92,7 @@ function updateUI(data) {
     document.getElementById("explanationText").textContent =
         data.explanation || "This content may be harmful.";
 
-    renderLabels(data.detected_labels || {});
+    renderLabels(data.detected_labels || {}, score);
     renderVictimSupport(data.victim_support_message);
     renderSafeSteps(data.safe_response_steps || []);
 
@@ -101,9 +101,15 @@ function updateUI(data) {
     toggle("resultsEmpty", false);
     toggle("resultsContent", true);
 
-    if (score >= 40) {
+    // Strict UI State Logic
+    const hasLabels = Object.values(data.detected_labels || {}).some(val => val === true);
+    const isRisk = score >= 40 || hasLabels;
+
+    if (isRisk) {
         toggle("riskState", true);
+        toggle("safeState", false);
     } else {
+        toggle("riskState", false);
         toggle("safeState", true);
     }
 
@@ -135,7 +141,7 @@ function updateRiskBar(score) {
 // ==============================
 // LABELS (GEMINI-BASED)
 // ==============================
-function renderLabels(labels) {
+function renderLabels(labels, score) {
     const container = document.getElementById("labelsContainer");
     if (!container) return;
 
@@ -162,8 +168,12 @@ function renderLabels(labels) {
     });
 
     if (!found) {
-        container.innerHTML =
-            `<span class="label-minimal safe">✓ No major risks detected</span>`;
+        if (score >= 40) {
+            // Safety Consistency: High score but no specific labels
+            container.innerHTML = `<span class="label-minimal detected">⚠ Unsafe content detected</span>`;
+        } else {
+            container.innerHTML = `<span class="label-minimal safe">✓ No major risks detected</span>`;
+        }
     }
 }
 
