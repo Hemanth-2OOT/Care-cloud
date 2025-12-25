@@ -14,7 +14,6 @@
       </div>
     </div>
 
-    <!-- SAFE USER FALLBACK -->
     <div class="user-info">
       <span class="user-name">
         {{ user.name if user is defined and user.name else 'User' }}
@@ -24,7 +23,7 @@
 
   <div class="dashboard-layout">
 
-    <!-- LEFT -->
+    <!-- LEFT PANEL -->
     <div class="action-card">
 
       <!-- GAUGE -->
@@ -46,19 +45,33 @@
         Paste any message or upload a screenshot. CareCloud will protect you.
       </p>
 
+      <!-- ANALYSIS FORM -->
       <form id="analyzeForm" enctype="multipart/form-data">
+
         <label>Text / Message</label>
         <textarea
-          name="text"
           id="text_content"
+          name="text"
           placeholder="Paste messages, comments, or anything that feels uncomfortable…"
-          rows="6"
+          rows="5"
         ></textarea>
 
         <label>Screenshot (optional)</label>
-        <input type="file" name="image" accept="image/*">
+        <input
+          type="file"
+          id="image_file"
+          name="image"
+          accept="image/*"
+          class="input-file"
+        >
 
-        <button type="submit" class="btn-analyze">Analyze Now</button>
+        <button
+          type="submit"
+          id="analyzeBtn"
+          class="btn-analyze"
+        >
+          Analyze Now
+        </button>
       </form>
 
       <!-- STATES -->
@@ -68,17 +81,18 @@
           <p>Analyzing safely…</p>
         </div>
 
-        <div id="safeState" style="display:none" class="safe-state">
+        <div id="safeState" class="safe-state" style="display:none">
           ✅ Content appears safe
         </div>
 
-        <div id="riskState" style="display:none" class="risk-state">
+        <div id="riskState" class="risk-state" style="display:none">
           ⚠ Potential harm detected
         </div>
       </div>
+
     </div>
 
-    <!-- RIGHT -->
+    <!-- RIGHT PANEL -->
     <div class="results-panel">
 
       <div id="resultsEmpty">
@@ -123,7 +137,7 @@
         </div>
 
         <!-- ALERT -->
-        <div id="alertInfo" class="alert-notification" style="display:none">
+        <div id="alertInfo" class="alert-notification">
           ⚠ A parent or guardian has been notified for safety
         </div>
       </div>
@@ -131,25 +145,7 @@
       <!-- HISTORY -->
       <div class="agent-insights">
         <h4>Recent Insights</h4>
-
-        {% if history is defined and history %}
-          {% for item in history %}
-          <div class="history-item">
-            <div>
-              <strong>{{ item.content_preview }}</strong>
-              <div class="history-meta">
-                {{ item.timestamp.strftime('%H:%M') if item.timestamp else '' }}
-                <span class="severity-{{ item.severity_level|lower }}">
-                  {{ item.severity_level }}
-                </span>
-              </div>
-            </div>
-            <div>{{ item.toxicity_score }}%</div>
-          </div>
-          {% endfor %}
-        {% else %}
-          <p class="text-muted">No previous analysis</p>
-        {% endif %}
+        <p class="text-muted">No previous analysis</p>
       </div>
 
     </div>
