@@ -142,15 +142,11 @@ function renderLabels(labels) {
     container.innerHTML = "";
 
     const LABEL_MAP = {
-        profanity: "Profanity",
-        harassment: "Harassment",
-        insult: "Insult",
-        hate_speech: "Hate Speech",
-        threat: "Threat",
         sexual_content: "Sexual Content",
         grooming: "Grooming",
-        emotional_abuse: "Emotional Abuse",
+        harassment: "Harassment",
         manipulation: "Manipulation",
+        emotional_abuse: "Emotional Abuse",
         violence: "Violence",
         self_harm_risk: "Self-Harm Risk"
     };
@@ -223,15 +219,11 @@ function renderHistory() {
 
         // Format detected labels
         const LABEL_MAP = {
-            profanity: "Profanity",
-            harassment: "Harassment",
-            insult: "Insult",
-            hate_speech: "Hate Speech",
-            threat: "Threat",
             sexual_content: "Sexual Content",
             grooming: "Grooming",
-            emotional_abuse: "Emotional Abuse",
+            harassment: "Harassment",
             manipulation: "Manipulation",
+            emotional_abuse: "Emotional Abuse",
             violence: "Violence",
             self_harm_risk: "Self-Harm Risk"
         };
