@@ -1,9 +1,9 @@
 import os
 import json
 import smtplib
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -13,26 +13,27 @@ from flask_login import (
     logout_user, current_user
 )
 from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
 
+from PIL import Image
+import pytesseract
 import google.generativeai as genai
 
 # =========================
-# APP SETUP
+# ENV + APP SETUP
 # =========================
+load_dotenv()
+
 app = Flask(__name__)
 
 @app.route("/health")
 def health():
     return "CareCloud is running", 200
 
-app.config["SECRET_KEY"] = os.getenv(
-    "SECRET_KEY", "carecloud-secret-key-change-this"
-)
-
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "carecloud-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", "sqlite:///database.db"
 )
-
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -45,9 +46,8 @@ login_manager.login_view = "login"
 # GEMINI PRO SETUP
 # =========================
 GEMINI_API_KEY = os.getenv("AI_INTEGRATIONS_GEMINI_API_KEY")
-
 if not GEMINI_API_KEY:
-    raise RuntimeError("AI_INTEGRATIONS_GEMINI_API_KEY is not set")
+    raise RuntimeError("AI_INTEGRATIONS_GEMINI_API_KEY missing")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-pro")
@@ -78,10 +78,12 @@ class Analysis(db.Model):
 
     toxicity_score = db.Column(db.Integer)
     severity_level = db.Column(db.String(20))
-    explanation = db.Column(db.Text)
-    victim_support_message = db.Column(db.Text)
-    safe_response_steps = db.Column(db.Text)
+    age_risk_level = db.Column(db.String(20))
+    ai_summary = db.Column(db.Text)
+
     labels = db.Column(db.Text)
+    intent_labels = db.Column(db.Text)
+    safe_response_steps = db.Column(db.Text)
     content_preview = db.Column(db.Text)
 
 
@@ -94,9 +96,7 @@ def load_user(user_id):
 # =========================
 @app.route("/")
 def index():
-    if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
-    return redirect(url_for("login"))
+    return redirect(url_for("dashboard")) if current_user.is_authenticated else redirect(url_for("login"))
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -109,13 +109,11 @@ def signup():
         user = User(
             name=request.form["name"],
             email=request.form["email"],
-            parent_email=request.form["parent_email"],
+            parent_email=request.form["parent_email"]
         )
         user.set_password(request.form["password"])
-
         db.session.add(user)
         db.session.commit()
-
         login_user(user)
         return redirect(url_for("dashboard"))
 
@@ -152,6 +150,7 @@ def dashboard():
 
     for h in history:
         h.labels_list = json.loads(h.labels or "{}")
+        h.intent_list = json.loads(h.intent_labels or "{}")
         h.steps = json.loads(h.safe_response_steps or "[]")
 
     return render_template("dashboard.html", user=current_user, history=history)
@@ -159,27 +158,27 @@ def dashboard():
 # =========================
 # EMAIL ALERT
 # =========================
-def send_email_alert(parent_email, student_name, score, severity, labels):
+def send_email_alert(parent_email, student_name, risk_level, summary):
     sender = os.getenv("MAIL_USERNAME")
     password = os.getenv("MAIL_PASSWORD")
-
     if not sender or not password:
         return False
 
     msg = MIMEMultipart()
     msg["From"] = sender
     msg["To"] = parent_email
-    msg["Subject"] = f"CareCloud Alert for {student_name}"
+    msg["Subject"] = f"CareCloud Safety Alert for {student_name}"
 
     body = f"""
-Harmful content detected.
+CareCloud detected HIGH-RISK content.
 
 Student: {student_name}
-Severity: {severity}
-Toxicity Score: {score}/100
-Labels: {labels}
+Risk Level: {risk_level}
 
-Please check in with your child and provide support.
+Summary:
+{summary}
+
+Please check in with your child.
 """
     msg.attach(MIMEText(body, "plain"))
 
@@ -194,7 +193,7 @@ Please check in with your child and provide support.
         return False
 
 # =========================
-# ANALYZE ROUTE
+# ANALYZE (INTENT + SAFETY)
 # =========================
 @app.route("/analyze", methods=["POST"])
 @login_required
@@ -203,109 +202,146 @@ def analyze():
     image = request.files.get("image")
 
     ocr_text = ""
-
     if image:
         try:
-            from PIL import Image
-            import pytesseract
-
             img = Image.open(image.stream).convert("RGB")
             ocr_text = pytesseract.image_to_string(img).strip()
         except Exception:
-            ocr_text = ""
+            pass
 
-    prompt = f"""
-You are a cyberbullying detection system for children and teenagers.
+    combined = f"{text} {ocr_text}".lower()
 
-STRICT RULES:
-- Any insult, profanity, harassment, humiliation, or abuse is cyberbullying.
-- Even short phrases like "fuck you", "you are ugly" are harmful.
-- Do NOT be lenient.
-- Assume the victim is emotionally vulnerable.
+    # -------------------------
+    # HARD SAFETY LABELS
+    # -------------------------
+    SAFETY_LABELS = {
+        "profanity": ["fuck", "shit", "bitch"],
+        "violence": ["kill", "stab", "attack"],
+        "gore": ["blood everywhere", "guts"],
+        "self_harm": ["kill yourself", "want to die"],
+        "sexual_content": ["porn", "nude"],
+        "drugs_alcohol": ["drugs", "alcohol"]
+    }
 
-SCORING:
-- Insult / profanity → toxicity_score >= 60
-- Repeated abuse → >= 75
-- Threats / self-harm encouragement → >= 90
+    detected_labels = {k: False for k in SAFETY_LABELS}
+    for label, words in SAFETY_LABELS.items():
+        if any(w in combined for w in words):
+            detected_labels[label] = True
 
-SEVERITY:
-- 0–30 → Low
-- 31–60 → Medium
-- 61–100 → High
+    # -------------------------
+    # INTENT ANALYSIS (AI)
+    # -------------------------
+    intent_prompt = f"""
+You are analyzing messages sent to a CHILD.
 
-PARENT ALERT:
-- parent_alert_required = true if toxicity_score >= 70
+Determine if the speaker shows any of these INTENTS:
+- emotional_manipulation
+- coercion
+- isolation
+- grooming
+- dependency
+- fear_induction
+- emotional_blackmail
 
-TEXT:
+Text:
 {text}
 
-OCR TEXT:
+OCR:
 {ocr_text}
 
-Return ONLY valid JSON with EXACT keys:
-toxicity_score,
-severity_level,
-explanation,
-victim_support_message,
-safe_response_steps,
-detected_labels,
-parent_alert_required
+Return ONLY JSON with each intent as true or false.
 """
-
     try:
-        response = model.generate_content(prompt)
-        raw = response.text.strip()
-
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start == -1 or end == -1:
-            raise ValueError("Invalid JSON")
-
-        analysis = json.loads(raw[start:end + 1])
-
+        intent_raw = model.generate_content(intent_prompt).text.strip()
+        s, e = intent_raw.find("{"), intent_raw.rfind("}")
+        intent_labels = json.loads(intent_raw[s:e+1])
     except Exception:
-        analysis = {
-            "toxicity_score": 0,
-            "severity_level": "Low",
-            "explanation": "Analysis failed",
-            "victim_support_message": "You are not alone. Stay safe.",
-            "safe_response_steps": [],
-            "detected_labels": {
-                "insult": False,
-                "harassment": False,
-                "profanity": False,
-                "threat": False,
-            },
-            "parent_alert_required": False,
-        }
+        intent_labels = {}
+
+    # -------------------------
+    # RISK CALCULATION
+    # -------------------------
+    risk_score = sum(1 for v in detected_labels.values() if v)
+    intent_score = sum(1 for v in intent_labels.values() if v)
+
+    if detected_labels.get("self_harm") or intent_labels.get("grooming"):
+        age_risk = "Critical"
+        severity = "High"
+        score = 95
+    elif risk_score + intent_score >= 3:
+        age_risk = "High Risk"
+        severity = "High"
+        score = 80
+    elif risk_score + intent_score >= 1:
+        age_risk = "Mild Risk"
+        severity = "Medium"
+        score = 55
+    else:
+        age_risk = "Safe"
+        severity = "Low"
+        score = 10
+
+    # -------------------------
+    # AI SUMMARY (KID FRIENDLY)
+    # -------------------------
+    summary_prompt = f"""
+Explain the safety concern in calm, simple language for a child or parent.
+
+Detected safety issues:
+{detected_labels}
+
+Detected intent patterns:
+{intent_labels}
+
+Keep it short, supportive, and non-judgmental.
+"""
+    try:
+        ai_summary = model.generate_content(summary_prompt).text.strip()
+    except Exception:
+        ai_summary = "This content may not be suitable for children."
+
+    analysis = {
+        "toxicity_score": score,
+        "severity_level": severity,
+        "age_risk_level": age_risk,
+        "ai_summary": ai_summary,
+        "detected_labels": detected_labels,
+        "intent_labels": intent_labels,
+        "safe_response_steps": [
+            "Do not respond",
+            "Block or mute the sender",
+            "Talk to a trusted adult"
+        ],
+        "parent_alert_required": age_risk in ["High Risk", "Critical"]
+    }
 
     record = Analysis(
         user_id=current_user.id,
-        toxicity_score=analysis.get("toxicity_score", 0),
-        severity_level=analysis.get("severity_level", "Low"),
-        explanation=analysis.get("explanation", ""),
-        victim_support_message=analysis.get("victim_support_message", ""),
-        safe_response_steps=json.dumps(analysis.get("safe_response_steps", [])),
-        labels=json.dumps(analysis.get("detected_labels", {})),
-        content_preview=text[:100],
+        toxicity_score=score,
+        severity_level=severity,
+        age_risk_level=age_risk,
+        ai_summary=ai_summary,
+        labels=json.dumps(detected_labels),
+        intent_labels=json.dumps(intent_labels),
+        safe_response_steps=json.dumps(analysis["safe_response_steps"]),
+        content_preview=text[:100]
     )
 
     db.session.add(record)
     db.session.commit()
 
-    if analysis.get("parent_alert_required"):
+    if analysis["parent_alert_required"]:
         send_email_alert(
             current_user.parent_email,
             current_user.name,
-            analysis.get("toxicity_score"),
-            analysis.get("severity_level"),
-            analysis.get("detected_labels"),
+            age_risk,
+            ai_summary
         )
 
     return jsonify(analysis)
 
 # =========================
-# START
+# RUN
 # =========================
 if __name__ == "__main__":
     with app.app_context():
