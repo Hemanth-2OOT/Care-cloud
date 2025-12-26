@@ -11,13 +11,18 @@ from flask import (
     jsonify, session, redirect, url_for, flash
 )
 
-import google.generativeai as genai
+from google import genai
+import logging
 
 # =====================================================
 # APP SETUP
 # =====================================================
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "carecloud-dev-secret")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # =====================================================
 # ENV VARIABLES
@@ -33,8 +38,12 @@ PORT = int(os.environ.get("PORT", 5000))
 # =====================================================
 # GEMINI SETUP
 # =====================================================
-genai.configure(api_key=GEMINI_API_KEY)
-gemini = genai.GenerativeModel("gemini-pro")
+client = None
+if GEMINI_API_KEY:
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini client: {e}")
 
 # =====================================================
 # HELPERS
@@ -223,6 +232,9 @@ def perspective_analyze(text):
 # GEMINI ANALYSIS (HEAVILY FINE-TUNED)
 # =====================================================
 def gemini_analyze(text):
+    if not client:
+        raise ValueError("Gemini client not initialized")
+
     prompt = f"""
 You are CareCloud Safety AI.
 
@@ -334,10 +346,14 @@ Message to analyze:
 \"\"\"{text}\"\"\"
 """
 
-    response = gemini.generate_content(prompt).text
-    start = response.find("{")
-    end = response.rfind("}") + 1
-    return json.loads(response[start:end])
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=prompt
+    )
+    response_text = response.text
+    start = response_text.find("{")
+    end = response_text.rfind("}") + 1
+    return json.loads(response_text[start:end])
 
 
 # =====================================================
@@ -391,7 +407,8 @@ def analyze():
 
     try:
         gemini_data = gemini_analyze(text)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Gemini Analysis Failed: {e}")
         gemini_data = local_analyze(text)
 
     final_score = max(
