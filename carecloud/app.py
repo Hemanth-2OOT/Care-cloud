@@ -96,18 +96,33 @@ def gemini_analyze(text):
     if not client:
         raise RuntimeError("Gemini client not available")
 
-    prompt = f"""You are CareCloud Safety Guardian AI.
-The reader is ALWAYS a child or teenager.
+    prompt = f"""You are CareCloud Safety Intelligence AI. Your primary responsibility is to protect CHILDREN and TEENAGERS from harmful digital communication.
 
-Rules:
-- Sexual language is NEVER safe for minors
-- Sexual invitations = HIGH RISK
-- Flattery + sexual intent = grooming
-- Never mark sexual content as safe
+CRITICAL: Assume the recipient is always a minor. Analyze at THREE levels:
+1. Literal Content
+2. Implied/Hidden Intent
+3. Escalation Risk
+
+SCORING RULES (NON-NEGOTIABLE):
+• sexual_content = true → risk_score ≥ 70
+• grooming = true → risk_score ≥ 80
+• If ANY label is true → content is NOT SAFE
+• NEVER mark content as safe if sexual intent exists
+• Friendly tone ≠ Safe intent. Compliments + sexual context = HIGH RISK
+
+LABEL DEFINITIONS:
+- sexual_content: explicit sexual language, body parts, invitations, sexualized compliments
+- grooming: flattery + sexual intent, normalization of sexual topics, secrecy requests
+- manipulation: emotional steering, "You're special", making child feel responsible
+- harassment: unwanted sexual attention, objectifying language
+- emotional_abuse: shaming, guilt-tripping, fear, control
+- violence: threats, intimidation, harm
+- self_harm_risk: encouraging or expressing self-harm or suicide
 
 Return STRICT JSON ONLY:
 {{
   "risk_score": number,
+  "severity_level": "Low | Medium | High | Critical",
   "detected_labels": {{
     "sexual_content": true/false,
     "grooming": true/false,
@@ -117,18 +132,24 @@ Return STRICT JSON ONLY:
     "violence": true/false,
     "self_harm_risk": true/false
   }},
-  "why_harmful": "Explain why unsafe for a child",
-  "victim_support_message": "Reassuring message",
+  "why_harmful": "Clear explanation written for a teenager",
+  "victim_support_message": "Kind, calming reassurance (never blame)",
   "safe_response_steps": [
     "Do not reply",
     "Block or mute the sender",
     "Tell a trusted adult"
   ],
-  "parent_guidance": "Supportive advice"
+  "dashboard_summary": {{
+    "risk_overview": "1-2 sentence plain-language summary",
+    "primary_concerns": ["Short label list"],
+    "intent_detected": "Explain hidden intent in simple terms",
+    "recommended_action": "Immediate guidance for the user",
+    "parent_visibility": true/false
+  }}
 }}
 
-Message:
-\"\"\"{text}\"\"\""""
+Message: "{text}"
+"""
 
     try:
         response = client.models.generate_content(
@@ -165,28 +186,61 @@ def local_fallback(text):
         "self_harm_risk": False
     }
     score = 10
-    sexual_terms = ["penis", "sex", "come sit", "touch me", "nude", "kiss", "send pic", "bed"]
-
-    if any(w in t for w in sexual_terms):
-        labels.update({
-            "sexual_content": True,
-            "grooming": True,
-            "harassment": True,
-            "manipulation": True
-        })
-        score = 85
-
+    severity = "Low"
+    
+    sexual_terms = ["penis", "sex", "come sit", "touch me", "nude", "kiss", "send pic", "bed", "pic", "nudes"]
+    grooming_terms = ["special", "only you", "don't tell", "our secret", "nobody needs to know", "you're mature"]
+    threat_terms = ["kill", "hurt", "punch", "stab", "die", "death"]
+    
+    has_sexual = any(w in t for w in sexual_terms)
+    has_grooming = any(w in t for w in grooming_terms)
+    has_threat = any(w in t for w in threat_terms)
+    
+    if has_sexual:
+        labels["sexual_content"] = True
+        score = max(score, 75)
+    
+    if has_sexual and has_grooming:
+        labels["grooming"] = True
+        labels["manipulation"] = True
+        score = max(score, 85)
+    elif has_grooming:
+        labels["grooming"] = True
+        labels["manipulation"] = True
+        score = max(score, 80)
+    
+    if has_sexual or has_grooming:
+        labels["harassment"] = True
+    
+    if has_threat:
+        labels["violence"] = True
+        score = max(score, 75)
+    
+    if score >= 90:
+        severity = "Critical"
+    elif score >= 70:
+        severity = "High"
+    elif score >= 40:
+        severity = "Medium"
+    
     return {
         "risk_score": score,
+        "severity_level": severity,
         "detected_labels": labels,
-        "why_harmful": "This message contains inappropriate sexual content for a minor.",
-        "victim_support_message": "You did nothing wrong. This is not okay.",
+        "why_harmful": "This message contains concerning language targeting a minor. Trust your instincts.",
+        "victim_support_message": "You did nothing wrong. This is not okay, and you deserve to feel safe.",
         "safe_response_steps": [
             "Do not reply",
-            "Block the sender",
-            "Tell a trusted adult"
+            "Block the sender immediately",
+            "Tell a trusted adult right away"
         ],
-        "parent_guidance": "Provide calm reassurance."
+        "dashboard_summary": {
+            "risk_overview": "This message shows patterns of concern.",
+            "primary_concerns": [k for k, v in labels.items() if v],
+            "intent_detected": "The sender may be trying to build trust before escalating.",
+            "recommended_action": "Block this person and tell a parent or school counselor.",
+            "parent_visibility": score >= 70
+        }
     }
 
 # =====================================================
@@ -301,6 +355,14 @@ def analyze():
             session["user"].get("parent_email")
         )
 
+    dashboard_summary = gemini_data.get("dashboard_summary", {
+        "risk_overview": "Analysis complete.",
+        "primary_concerns": [k for k, v in detected.items() if v],
+        "intent_detected": "Review the detected labels above.",
+        "recommended_action": "Follow the safety steps provided.",
+        "parent_visibility": final_score >= 70
+    })
+
     return jsonify({
         "toxicity_score": final_score,
         "severity_level": severity,
@@ -308,6 +370,7 @@ def analyze():
         "explanation": gemini_data.get("why_harmful", "Analysis complete."),
         "victim_support_message": gemini_data.get("victim_support_message", "Stay safe and talk to someone you trust."),
         "safe_response_steps": gemini_data.get("safe_response_steps", ["Do not reply", "Block sender", "Tell an adult"]),
+        "dashboard_summary": dashboard_summary,
         "parent_alert_required": final_score >= 80
     })
 
