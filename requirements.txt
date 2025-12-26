@@ -8,3 +8,13 @@ gunicorn
 pillow
 pytesseract
 requests
+flask
+flask-login
+flask-sqlalchemy
+google-genai
+gunicorn
+pillow
+pytesseract
+python-dotenv
+requests
+werkzeug
