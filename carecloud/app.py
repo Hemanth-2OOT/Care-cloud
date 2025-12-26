@@ -96,56 +96,55 @@ def gemini_analyze(text):
     if not client:
         raise RuntimeError("Gemini client not available")
 
-    prompt = f"""You are CareCloud Safety Intelligence AI. Your primary responsibility is to protect CHILDREN and TEENAGERS from harmful digital communication.
+    prompt = f"""You are CareCloud Safety AI. Analyze ONLY this message as if sent to a minor.
 
-CRITICAL: Assume the recipient is always a minor. Analyze at THREE levels:
-1. Literal Content
-2. Implied/Hidden Intent
-3. Escalation Risk
+Your output MUST be fully CONTEXT-AWARE. Do NOT use generic text.
+- Explain WHY it is harmful (specific words, tone, intent)
+- Generate support that matches THIS situation
+- Generate instructions tailored to THIS risk level
+- NEVER repeat same instructions for every message
+- NEVER say "This is not okay" without explaining why
 
-SCORING RULES (NON-NEGOTIABLE):
-• sexual_content = true → risk_score ≥ 70
-• grooming = true → risk_score ≥ 80
-• If ANY label is true → content is NOT SAFE
-• NEVER mark content as safe if sexual intent exists
-• Friendly tone ≠ Safe intent. Compliments + sexual context = HIGH RISK
+CRITICAL: Assume recipient is a minor. Detect grooming, manipulation, hidden sexual intent.
 
 LABEL DEFINITIONS:
-- sexual_content: explicit sexual language, body parts, invitations, sexualized compliments
-- grooming: flattery + sexual intent, normalization of sexual topics, secrecy requests
-- manipulation: emotional steering, "You're special", making child feel responsible
+- sexual_content: explicit language, body parts, invitations, sexualized compliments
+- grooming: flattery + sexual intent, normalization, secrecy requests
+- manipulation: "You're special", emotional steering, making child feel responsible
 - harassment: unwanted sexual attention, objectifying language
 - emotional_abuse: shaming, guilt-tripping, fear, control
 - violence: threats, intimidation, harm
-- self_harm_risk: encouraging or expressing self-harm or suicide
+- self_harm_risk: encouraging self-harm or suicide
 
-Return STRICT JSON ONLY:
+RULES:
+• sexual_content = true → risk_score ≥ 70
+• grooming = true → risk_score ≥ 80
+• If ANY label true → NOT SAFE
+• Friendly tone ≠ safe. Compliments + sexual = HIGH RISK
+
+Return STRICT JSON ONLY (no extra text):
 {{
   "risk_score": number,
   "severity_level": "Low | Medium | High | Critical",
   "detected_labels": {{
-    "sexual_content": true/false,
-    "grooming": true/false,
-    "harassment": true/false,
-    "manipulation": true/false,
-    "emotional_abuse": true/false,
-    "violence": true/false,
-    "self_harm_risk": true/false
+    "sexual_content": boolean,
+    "grooming": boolean,
+    "harassment": boolean,
+    "manipulation": boolean,
+    "emotional_abuse": boolean,
+    "violence": boolean,
+    "self_harm_risk": boolean
   }},
-  "why_harmful": "Clear explanation written for a teenager",
-  "victim_support_message": "Kind, calming reassurance (never blame)",
+  "context_summary": "2-3 lines: what this message does, why unsafe",
+  "intent_detected": "Hidden/implied intent in simple language",
+  "support_for_user": "Empathetic message tailored to THIS exact situation",
+  "why_harmful": "Explanation for teenager (specific to message)",
+  "victim_support_message": "Calming reassurance (never blame)",
   "safe_response_steps": [
-    "Do not reply",
-    "Block or mute the sender",
-    "Tell a trusted adult"
-  ],
-  "dashboard_summary": {{
-    "risk_overview": "1-2 sentence plain-language summary",
-    "primary_concerns": ["Short label list"],
-    "intent_detected": "Explain hidden intent in simple terms",
-    "recommended_action": "Immediate guidance for the user",
-    "parent_visibility": true/false
-  }}
+    "Specific action 1 for THIS message",
+    "Specific action 2 for THIS message",
+    "Specific action 3 for THIS message"
+  ]
 }}
 
 Message: "{text}"
@@ -223,24 +222,67 @@ def local_fallback(text):
     elif score >= 40:
         severity = "Medium"
     
+    context_summary = ""
+    intent = ""
+    support = ""
+    steps = []
+    
+    if has_sexual and has_grooming:
+        context_summary = "This message uses flattery mixed with sexual language. It's a common grooming tactic where someone tries to make you feel special while also testing your boundaries."
+        intent = "The sender is attempting to normalize sexual conversation while building your trust, gradually escalating the relationship toward sexual content."
+        support = "You are not overreacting. Adults who mix compliments with sexual interest are trying to manipulate you. You deserve adults who respect your safety."
+        steps = [
+            "Screenshot this message (don't delete it)",
+            "Block this person immediately on all platforms",
+            "Show a trusted adult or school counselor right now"
+        ]
+    elif has_grooming:
+        context_summary = "This message uses special attention and flattery to make you feel unique and understood. This is a grooming pattern designed to isolate you."
+        intent = "The sender wants you to feel like they 'get you' in a way others don't, making you less likely to tell adults about the relationship."
+        support = "Real caring adults in your life already support you. Suspicious online attention is a warning sign, not a compliment."
+        steps = [
+            "Remember: They don't actually know you",
+            "Stop responding to this person",
+            "Tell a parent, school counselor, or call NCMEC (1-800-843-5678)"
+        ]
+    elif has_sexual:
+        context_summary = "This message contains explicit sexual language directed at a minor. This is predatory behavior."
+        intent = "The sender is testing if you'll engage with sexual content, or trying to shock/manipulate you into responding."
+        support = "You didn't do anything to cause this. Sexual messages from adults to minors are always wrong."
+        steps = [
+            "Do not respond or engage",
+            "Block and report on this platform",
+            "Tell a trusted adult immediately"
+        ]
+    elif has_threat:
+        context_summary = "This message contains threats or language meant to frighten or harm you."
+        intent = "The sender is trying to control or intimidate you through fear."
+        support = "Threats are serious. Your safety matters, and you don't deserve to be treated this way."
+        steps = [
+            "Take threats seriously (even if they seem joking)",
+            "Save evidence and report to platform",
+            "Tell a school official or parent immediately"
+        ]
+    else:
+        context_summary = "This message has raised some concerns. Trust your gut if something feels off."
+        intent = "Possible concerning intent detected."
+        support = "Your instincts about uncomfortable messages are important."
+        steps = [
+            "Take a break from responding",
+            "Talk to someone you trust about how it made you feel",
+            "You can block or mute anytime"
+        ]
+    
     return {
         "risk_score": score,
         "severity_level": severity,
         "detected_labels": labels,
-        "why_harmful": "This message contains concerning language targeting a minor. Trust your instincts.",
-        "victim_support_message": "You did nothing wrong. This is not okay, and you deserve to feel safe.",
-        "safe_response_steps": [
-            "Do not reply",
-            "Block the sender immediately",
-            "Tell a trusted adult right away"
-        ],
-        "dashboard_summary": {
-            "risk_overview": "This message shows patterns of concern.",
-            "primary_concerns": [k for k, v in labels.items() if v],
-            "intent_detected": "The sender may be trying to build trust before escalating.",
-            "recommended_action": "Block this person and tell a parent or school counselor.",
-            "parent_visibility": score >= 70
-        }
+        "context_summary": context_summary,
+        "intent_detected": intent,
+        "support_for_user": support,
+        "why_harmful": context_summary,
+        "victim_support_message": support,
+        "safe_response_steps": steps
     }
 
 # =====================================================
@@ -355,22 +397,19 @@ def analyze():
             session["user"].get("parent_email")
         )
 
-    dashboard_summary = gemini_data.get("dashboard_summary", {
-        "risk_overview": "Analysis complete.",
-        "primary_concerns": [k for k, v in detected.items() if v],
-        "intent_detected": "Review the detected labels above.",
-        "recommended_action": "Follow the safety steps provided.",
-        "parent_visibility": final_score >= 70
-    })
+    explanation = gemini_data.get("why_harmful") or gemini_data.get("context_summary", "Analysis complete.")
+    support_msg = gemini_data.get("victim_support_message") or gemini_data.get("support_for_user", "Stay safe and talk to someone you trust.")
+    steps = gemini_data.get("safe_response_steps", ["Do not reply", "Block sender", "Tell an adult"])
 
     return jsonify({
         "toxicity_score": final_score,
         "severity_level": severity,
         "detected_labels": detected,
-        "explanation": gemini_data.get("why_harmful", "Analysis complete."),
-        "victim_support_message": gemini_data.get("victim_support_message", "Stay safe and talk to someone you trust."),
-        "safe_response_steps": gemini_data.get("safe_response_steps", ["Do not reply", "Block sender", "Tell an adult"]),
-        "dashboard_summary": dashboard_summary,
+        "explanation": explanation,
+        "victim_support_message": support_msg,
+        "safe_response_steps": steps,
+        "context_summary": gemini_data.get("context_summary"),
+        "intent_detected": gemini_data.get("intent_detected"),
         "parent_alert_required": final_score >= 80
     })
 
