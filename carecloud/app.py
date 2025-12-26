@@ -2,6 +2,9 @@ import os
 import json
 import requests
 import smtplib
+import logging
+import io
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -9,11 +12,9 @@ from flask import (
     Flask, render_template, request,
     jsonify, session, redirect, url_for
 )
-from PIL import Image
-import io
 
+from PIL import Image
 from google import genai
-import logging
 
 # =====================================================
 # APP SETUP
@@ -21,7 +22,9 @@ import logging
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "carecloud-dev-secret")
 
-# Configure logging
+PORT = int(os.environ.get("PORT", 8080))
+
+# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,17 +37,18 @@ MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
 MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
 
 # =====================================================
-# GEMINI SETUP
+# GEMINI CLIENT (NEW SDK – SAFE)
 # =====================================================
 client = None
 if GEMINI_API_KEY:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
+        logger.info("Gemini client initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize Gemini client: {e}")
+        logger.error(f"Gemini init failed: {e}")
 
 # =====================================================
-# AUTH HELPERS
+# AUTH HELPER
 # =====================================================
 def logged_in():
     return "user" in session
@@ -53,7 +57,7 @@ def logged_in():
 # PERSPECTIVE API
 # =====================================================
 def perspective_analyze(text):
-    if not PERSPECTIVE_API_KEY:
+    if not PERSPECTIVE_API_KEY or not text:
         return {}
 
     try:
@@ -75,7 +79,8 @@ def perspective_analyze(text):
             timeout=8
         )
         data = r.json()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Perspective error: {e}")
         return {}
 
     scores = {}
@@ -85,33 +90,24 @@ def perspective_analyze(text):
     return scores
 
 # =====================================================
-# GEMINI — INTENT + MANIPULATION SAFE PROMPT
+# GEMINI ANALYSIS (INTENT + GROOMING SAFE)
 # =====================================================
-def gemini_analyze(text, image=None):
+def gemini_analyze(text):
     if not client:
-        raise ValueError("Gemini client not initialized")
+        raise RuntimeError("Gemini client not available")
 
     prompt = f"""
 You are CareCloud Safety Guardian AI.
 
 The reader is ALWAYS a child or teenager.
 
-Analyze:
-- Explicit meaning
-- Hidden intent
-- Grooming patterns
-- Manipulation or boundary testing
-- Sexual invitations even if polite
-
-ABSOLUTE RULES:
-- Sexual content is NEVER safe for minors
+Rules:
+- Sexual language is NEVER safe for minors
 - Sexual invitations = HIGH RISK
 - Flattery + sexual intent = grooming
-- If sexual_content → risk_score ≥ 70
-- If grooming → risk_score ≥ 80
-- NEVER say "safe" if harm exists
+- Never mark sexual content as safe
 
-Return ONLY valid JSON:
+Return STRICT JSON ONLY:
 
 {{
   "risk_score": number,
@@ -124,7 +120,7 @@ Return ONLY valid JSON:
     "violence": true/false,
     "self_harm_risk": true/false
   }},
-  "why_harmful": "Explain why this is unsafe for a child",
+  "why_harmful": "Explain why unsafe for a child",
   "victim_support_message": "Reassuring message",
   "safe_response_steps": [
     "Do not reply",
@@ -138,18 +134,15 @@ Message:
 \"\"\"{text}\"\"\"
 """
 
-    contents = [prompt]
-    if image:
-        contents.append(image)
-
     response = client.models.generate_content(
         model="gemini-1.5-flash",
-        contents=contents
+        contents=[prompt]
     )
-    response_text = response.text
-    start = response_text.find("{")
-    end = response_text.rfind("}") + 1
-    return json.loads(response_text[start:end])
+
+    raw = response.text
+    start = raw.find("{")
+    end = raw.rfind("}") + 1
+    return json.loads(raw[start:end])
 
 # =====================================================
 # LOCAL FALLBACK (NEVER FAILS)
@@ -187,20 +180,20 @@ def local_fallback(text):
         "risk_score": score,
         "detected_labels": labels,
         "why_harmful": "This message contains inappropriate sexual content for a minor.",
-        "victim_support_message": "You did nothing wrong. This behavior is not okay.",
+        "victim_support_message": "You did nothing wrong. This is not okay.",
         "safe_response_steps": [
             "Do not reply",
             "Block the sender",
             "Tell a trusted adult"
         ],
-        "parent_guidance": "Provide calm reassurance and support."
+        "parent_guidance": "Provide calm reassurance."
     }
 
 # =====================================================
 # EMAIL ALERT
 # =====================================================
 def send_parent_alert(text, score, parent_email):
-    if not (parent_email and MAIL_USERNAME and MAIL_PASSWORD):
+    if not (MAIL_USERNAME and MAIL_PASSWORD and parent_email):
         return
 
     msg = MIMEMultipart()
@@ -260,7 +253,7 @@ def dashboard():
     return render_template("dashboard.html", user=session["user"], history=[])
 
 # =====================================================
-# ANALYZE ENDPOINT (CONSISTENT)
+# ANALYZE ENDPOINT (FINAL SAFE VERSION)
 # =====================================================
 @app.route("/analyze", methods=["POST"])
 def analyze():
@@ -268,34 +261,18 @@ def analyze():
         return jsonify({"error": "Unauthorized"}), 401
 
     text = request.form.get("text", "").strip()
-    image_file = request.files.get("image")
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
 
-    if not text and not image_file:
-        return jsonify({"error": "No text or image provided"}), 400
-
-    image = None
-    if image_file:
-        try:
-            image_bytes = image_file.read()
-            image = Image.open(io.BytesIO(image_bytes))
-        except Exception as e:
-            logger.error(f"Image processing failed: {e}")
+    perspective = perspective_analyze(text)
 
     try:
-        if text:
-            perspective = perspective_analyze(text)
-        else:
-            perspective = {}
-    except Exception:
-        perspective = {}
+        gemini_data = gemini_analyze(text)
+    except Exception as e:
+        logger.error(f"Gemini failed: {e}")
+        gemini_data = local_fallback(text)
 
-    try:
-
-    gemini_data = gemini_analyze(text)
-
-except Exception:
-
-    gemini_data = local_fallback(text)
+    final_score = max(
         perspective.get("toxicity", 0),
         gemini_data.get("risk_score", 0)
     )
@@ -332,3 +309,9 @@ except Exception:
         "safe_response_steps": gemini_data["safe_response_steps"],
         "parent_alert_required": final_score >= 80
     })
+
+# =====================================================
+# RUN
+# =====================================================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=PORT)
