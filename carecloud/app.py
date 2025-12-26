@@ -105,16 +105,16 @@ CORE PRINCIPLES (STRICT):
 • Never downplay harm
 • False negatives are NOT acceptable
 
-LABEL DEFINITIONS (EXPANDED):
+LABEL DEFINITIONS:
 - harassment: Insults, humiliation, degrading language
-- violence: Any encouragement/threat of physical harm (hit, slap, beat, kill)
-- emotional_abuse: Shaming, intimidation, guilt, psychological harm
+- profanity: Vulgar, explicit, or offensive language
+- hate_speech: Attacks on identity, family, race, gender, religion
 - sexual_content: Sexual language, body parts, or sexual acts
 - grooming: Flattery, trust-building, or normalization with sexual intent
 - manipulation: Pressure, coercion, secrecy, emotional steering
-- hate_speech: Attacks on identity, family, race, gender, religion
 - threats: Direct or implied threats of harm
-- coercion: Forcing or pushing someone toward an action
+- violence: Any encouragement/threat of physical harm (hit, slap, beat, kill)
+- emotional_abuse: Shaming, intimidation, guilt, psychological harm
 - self_harm_risk: Encouraging or expressing self-harm
 
 SCORING RULES (MANDATORY):
@@ -124,34 +124,25 @@ SCORING RULES (MANDATORY):
 • grooming or coercion → risk_score ≥ 80
 • If ANY label true → NOT SAFE
 
-ABSOLUTE UI SAFETY RULES:
-• "Safe" is allowed ONLY when: risk_score < 30 AND all labels false
-• If risk_score ≥ 40 → explanation MUST mention harm
-• Labels, score, explanation, instructions MUST agree
-
 Return STRICT JSON ONLY:
 {{
   "risk_score": number,
   "severity_level": "Low | Medium | High | Critical",
   "detected_labels": {{
     "harassment": boolean,
-    "violence": boolean,
-    "emotional_abuse": boolean,
+    "profanity": boolean,
+    "hate_speech": boolean,
     "sexual_content": boolean,
     "grooming": boolean,
     "manipulation": boolean,
-    "hate_speech": boolean,
     "threats": boolean,
-    "coercion": boolean,
+    "violence": boolean,
+    "emotional_abuse": boolean,
     "self_harm_risk": boolean
   }},
-  "context_summary": "Explain clearly why THIS message is harmful or concerning",
-  "support_for_user": "Supportive, calm message tailored to this situation",
-  "instructions": [
-    "Action 1 appropriate to this risk",
-    "Action 2 appropriate to this risk",
-    "Action 3 if needed"
-  ]
+  "context_summary": "Explain clearly why THIS message is harmful",
+  "support_for_user": "Supportive message tailored to this situation",
+  "instructions": ["Action 1", "Action 2", "Action 3"]
 }}
 
 Message: "{text}"
@@ -184,14 +175,14 @@ def local_fallback(text):
     t = text.lower()
     labels = {
         "harassment": False,
-        "violence": False,
-        "emotional_abuse": False,
+        "profanity": False,
+        "hate_speech": False,
         "sexual_content": False,
         "grooming": False,
         "manipulation": False,
-        "hate_speech": False,
         "threats": False,
-        "coercion": False,
+        "violence": False,
+        "emotional_abuse": False,
         "self_harm_risk": False
     }
     score = 10
@@ -203,6 +194,7 @@ def local_fallback(text):
     insult_terms = ["stupid", "dumb", "idiot", "loser", "worthless", "ugly", "fat"]
     coercion_terms = ["you have to", "you must", "you need to", "i'll tell everyone", "everyone will know", "you owe me"]
     hate_terms = ["hate all", "stupid", "inferior", "trash", "dirty"]
+    profanity_terms = ["f***", "s***", "a**", "b****", "h***", "damn", "hell"]
     
     has_sexual = any(w in t for w in sexual_terms)
     has_grooming = any(w in t for w in grooming_terms)
@@ -210,6 +202,7 @@ def local_fallback(text):
     has_insult = any(w in t for w in insult_terms)
     has_coercion = any(w in t for w in coercion_terms)
     has_hate = any(w in t for w in hate_terms)
+    has_profanity = any(w in t for w in profanity_terms)
     has_self_harm = any(w in t for w in ["kill myself", "hurt myself", "die", "suicide"])
     
     if has_threat:
@@ -230,6 +223,10 @@ def local_fallback(text):
         labels["grooming"] = True
         labels["manipulation"] = True
         score = max(score, 80)
+    
+    if has_profanity:
+        labels["profanity"] = True
+        score = max(score, 25)
     
     if has_insult:
         labels["harassment"] = True
@@ -356,6 +353,51 @@ def signup():
         return redirect(url_for("dashboard"))
     return render_template("login.html", mode="signup")
 
+# =====================================================
+# RESPONSE GENERATORS
+# =====================================================
+def generate_user_summary(labels, severity):
+    if labels.get("sexual_content"):
+        return "This message contains sexual language that is unsafe for minors."
+    if labels.get("grooming"):
+        return "This message attempts to build inappropriate trust or intimacy."
+    if labels.get("threats") or labels.get("violence"):
+        return "This message includes threats or violent language."
+    if labels.get("harassment") or labels.get("profanity"):
+        return "This message contains abusive or hostile language."
+    if labels.get("emotional_abuse"):
+        return "This message may cause emotional harm."
+    return "No major safety risks were detected."
+
+def generate_instructions(labels, severity):
+    if labels.get("sexual_content") or labels.get("grooming"):
+        return [
+            "Do not reply",
+            "Block the sender immediately",
+            "Tell a trusted adult right away"
+        ]
+    if labels.get("threats") or labels.get("violence"):
+        return [
+            "Do not engage",
+            "Save evidence",
+            "Report to platform or authorities"
+        ]
+    if labels.get("harassment") or labels.get("profanity"):
+        return [
+            "Mute or block the sender",
+            "Do not escalate",
+            "Take a break if needed"
+        ]
+    return [
+        "Continue being cautious online",
+        "Trust your instincts"
+    ]
+
+def generate_support_message(labels):
+    if any(labels.values()):
+        return "You did nothing wrong. Harmful messages are not your fault."
+    return "Everything looks okay. Stay safe online."
+
 @app.route("/logout")
 def logout():
     session.clear()
@@ -413,17 +455,14 @@ def analyze():
             session["user"].get("parent_email")
         )
 
-    explanation = gemini_data.get("context_summary", "Analysis complete.")
-    support_msg = gemini_data.get("support_for_user", "Stay safe and talk to someone you trust.")
-    steps = gemini_data.get("instructions", ["Do not reply", "Block sender", "Tell an adult"])
-
     return jsonify({
         "toxicity_score": final_score,
         "severity_level": severity,
         "detected_labels": detected,
-        "explanation": explanation,
-        "victim_support_message": support_msg,
-        "safe_response_steps": steps,
+        "summary": generate_user_summary(detected, severity),
+        "support_message": generate_support_message(detected),
+        "instructions": generate_instructions(detected, severity),
+        "content_safe": not any(detected.values()),
         "parent_alert_required": final_score >= 80
     })
 
