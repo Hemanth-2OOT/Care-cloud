@@ -22,7 +22,7 @@
     <div class="container">
       <a href="/" class="logo">☁️ CareCloud</a>
 
-      {% if session.get('username') %}
+      {% if session.get('user') %}
         <a href="/logout" class="btn-logout">Logout</a>
       {% endif %}
     </div>

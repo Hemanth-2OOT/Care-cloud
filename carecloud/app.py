@@ -228,7 +228,7 @@ def login():
         session["user"] = {
             "name": email.split("@")[0].title(),
             "email": email,
-            "parent_email": request.form.get("parent_email") or session.get("parent_email")
+            "parent_email": request.form.get("parent_email", "")
         }
         return redirect(url_for("dashboard"))
     return render_template("login.html", mode="login")
