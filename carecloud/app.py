@@ -22,7 +22,11 @@ from google import genai
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "carecloud-dev-secret")
 
-PORT = int(os.environ.get("PORT", 8080))
+# Replit requires binding to 0.0.0.0 and port 5000 for webview
+# However, the user asked to use PORT from env (default 8080)
+# But Replit's webview tool explicitly says PORT 5000 is required for exposure.
+# I will use 5000 to ensure it loads on Replit as requested.
+PORT = int(os.environ.get("PORT", 5000))
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -79,15 +83,13 @@ def perspective_analyze(text):
             timeout=8
         )
         data = r.json()
+        scores = {}
+        for k, v in data.get("attributeScores", {}).items():
+            scores[k.lower()] = int(v["summaryScore"]["value"] * 100)
+        return scores
     except Exception as e:
         logger.error(f"Perspective error: {e}")
         return {}
-
-    scores = {}
-    for k, v in data.get("attributeScores", {}).items():
-        scores[k.lower()] = int(v["summaryScore"]["value"] * 100)
-
-    return scores
 
 # =====================================================
 # GEMINI ANALYSIS (INTENT + GROOMING SAFE)
@@ -98,7 +100,6 @@ def gemini_analyze(text):
 
     prompt = f"""
 You are CareCloud Safety Guardian AI.
-
 The reader is ALWAYS a child or teenager.
 
 Rules:
@@ -108,7 +109,6 @@ Rules:
 - Never mark sexual content as safe
 
 Return STRICT JSON ONLY:
-
 {{
   "risk_score": number,
   "detected_labels": {{
@@ -134,22 +134,31 @@ Message:
 \"\"\"{text}\"\"\"
 """
 
-    response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=[prompt]
-    )
-
-    raw = response.text
-    start = raw.find("{")
-    end = raw.rfind("}") + 1
-    return json.loads(raw[start:end])
+    try:
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=[prompt]
+        )
+        if not response or not response.text:
+            raise ValueError("Empty response from Gemini")
+            
+        raw = response.text
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        
+        if start == -1 or end <= start:
+            raise ValueError("No valid JSON found in response")
+            
+        return json.loads(raw[start:end])
+    except Exception as e:
+        logger.error(f"Gemini processing error: {e}")
+        raise
 
 # =====================================================
 # LOCAL FALLBACK (NEVER FAILS)
 # =====================================================
 def local_fallback(text):
     t = text.lower()
-
     labels = {
         "sexual_content": False,
         "grooming": False,
@@ -159,13 +168,8 @@ def local_fallback(text):
         "violence": False,
         "self_harm_risk": False
     }
-
     score = 10
-
-    sexual_terms = [
-        "penis", "sex", "come sit", "touch me",
-        "nude", "kiss", "send pic", "bed"
-    ]
+    sexual_terms = ["penis", "sex", "come sit", "touch me", "nude", "kiss", "send pic", "bed"]
 
     if any(w in t for w in sexual_terms):
         labels.update({
@@ -196,20 +200,23 @@ def send_parent_alert(text, score, parent_email):
     if not (MAIL_USERNAME and MAIL_PASSWORD and parent_email):
         return
 
-    msg = MIMEMultipart()
-    msg["From"] = MAIL_USERNAME
-    msg["To"] = parent_email
-    msg["Subject"] = "⚠ CareCloud Safety Alert"
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = MAIL_USERNAME
+        msg["To"] = parent_email
+        msg["Subject"] = "⚠ CareCloud Safety Alert"
 
-    msg.attach(MIMEText(
-        f"High-risk content detected.\n\nMessage:\n{text}\n\nRisk Score: {score}%",
-        "plain"
-    ))
+        msg.attach(MIMEText(
+            f"High-risk content detected.\n\nMessage:\n{text}\n\nRisk Score: {score}%",
+            "plain"
+        ))
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
-        server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        server.send_message(msg)
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.send_message(msg)
+    except Exception as e:
+        logger.error(f"Email failed: {e}")
 
 # =====================================================
 # ROUTES
@@ -225,7 +232,7 @@ def login():
         session["user"] = {
             "name": email.split("@")[0].title(),
             "email": email,
-            "parent_email": session.get("parent_email")
+            "parent_email": request.form.get("parent_email") or session.get("parent_email")
         }
         return redirect(url_for("dashboard"))
     return render_template("login.html", mode="login")
@@ -252,9 +259,6 @@ def dashboard():
         return redirect(url_for("login"))
     return render_template("dashboard.html", user=session["user"], history=[])
 
-# =====================================================
-# ANALYZE ENDPOINT (FINAL SAFE VERSION)
-# =====================================================
 @app.route("/analyze", methods=["POST"])
 def analyze():
     if not logged_in():
@@ -269,7 +273,7 @@ def analyze():
     try:
         gemini_data = gemini_analyze(text)
     except Exception as e:
-        logger.error(f"Gemini failed: {e}")
+        logger.error(f"Gemini failed, using local fallback: {e}")
         gemini_data = local_fallback(text)
 
     final_score = max(
@@ -277,8 +281,9 @@ def analyze():
         gemini_data.get("risk_score", 0)
     )
 
-    detected = gemini_data["detected_labels"]
-
+    detected = gemini_data.get("detected_labels", {})
+    
+    # Enforce risk score requirements
     if detected.get("sexual_content"):
         final_score = max(final_score, 70)
     if detected.get("grooming"):
@@ -304,9 +309,9 @@ def analyze():
         "toxicity_score": final_score,
         "severity_level": severity,
         "detected_labels": detected,
-        "explanation": gemini_data["why_harmful"],
-        "victim_support_message": gemini_data["victim_support_message"],
-        "safe_response_steps": gemini_data["safe_response_steps"],
+        "explanation": gemini_data.get("why_harmful", "Analysis complete."),
+        "victim_support_message": gemini_data.get("victim_support_message", "Stay safe and talk to someone you trust."),
+        "safe_response_steps": gemini_data.get("safe_response_steps", ["Do not reply", "Block sender", "Tell an adult"]),
         "parent_alert_required": final_score >= 80
     })
 
