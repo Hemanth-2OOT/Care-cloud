@@ -1,14 +1,4 @@
 flask
-flask-sqlalchemy
-flask-login
-google-genai
-python-dotenv
-werkzeug
-gunicorn
-pillow
-pytesseract
-requests
-flask
 flask-login
 flask-sqlalchemy
 google-genai
