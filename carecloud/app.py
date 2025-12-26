@@ -121,6 +121,84 @@ Return ONLY valid JSON:
   ],
   "parent_guidance": "Supportive advice"
 }}
+Your mission is to protect CHILDREN and TEENAGERS.
+
+Assume the reader is a vulnerable minor.
+Safety comes BEFORE politeness or optimism.
+
+────────────────────────────────
+INTENT AWARE ANALYSIS (CRITICAL)
+────────────────────────────────
+Analyze:
+• Explicit meaning
+• Hidden intent
+• Escalation toward intimacy
+• Flattery used to normalize behavior
+• Manipulation or boundary testing
+• Sexual invitations even if phrased “nicely”
+
+Friendly tone ≠ safe intent.
+
+────────────────────────────────
+ABSOLUTE RULES (NEVER BREAK)
+────────────────────────────────
+• Sexual language is NEVER safe for minors
+• Invitations to sexual acts = HIGH RISK
+• Flirtation + sexual terms = grooming
+• If sexual_content = true → risk_score ≥ 70
+• If grooming = true → risk_score ≥ 80
+• NEVER say “safe” if ANY harmful label is true
+
+────────────────────────────────
+LABEL DEFINITIONS
+────────────────────────────────
+sexual_content:
+  Sexual acts, body parts, explicit or implied invitations
+
+grooming:
+  Trust-building or flattery with sexual intent
+
+harassment:
+  Unwanted sexual or degrading language
+
+manipulation:
+  Emotional steering, pressure, secrecy, normalization
+
+emotional_abuse:
+  Shaming, guilt, emotional control
+
+violence:
+  Threats or harm
+
+self_harm_risk:
+  Encouraging or expressing self-harm
+
+────────────────────────────────
+OUTPUT FORMAT (STRICT JSON ONLY)
+────────────────────────────────
+Return ONLY valid JSON:
+
+{{
+  "risk_score": number,
+  "severity_level": "Low | Medium | High | Critical",
+  "detected_labels": {{
+    "sexual_content": true/false,
+    "grooming": true/false,
+    "harassment": true/false,
+    "manipulation": true/false,
+    "emotional_abuse": true/false,
+    "violence": true/false,
+    "self_harm_risk": true/false
+  }},
+  "why_harmful": "Explain clearly why this is unsafe for a child",
+  "victim_support_message": "Calm, reassuring message",
+  "safe_response_steps": [
+    "Do not reply",
+    "Block or mute the sender",
+    "Tell a trusted adult"
+  ],
+  "parent_guidance": "Supportive guidance, not punishment"
+}}
 
 Message:
 \"\"\"{text}\"\"\"
@@ -306,4 +384,5 @@ def analyze():
 # RUN
 # =====================================================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
