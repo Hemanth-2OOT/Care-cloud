@@ -22,10 +22,7 @@ from google import genai
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "carecloud-dev-secret")
 
-# Replit requires binding to 0.0.0.0 and port 5000 for webview
-# However, the user asked to use PORT from env (default 8080)
-# But Replit's webview tool explicitly says PORT 5000 is required for exposure.
-# I will use 5000 to ensure it loads on Replit as requested.
+# Replit webview requires port 5000. Use PORT env var to override.
 PORT = int(os.environ.get("PORT", 5000))
 
 # Logging
@@ -50,6 +47,7 @@ if GEMINI_API_KEY:
         logger.info("Gemini client initialized")
     except Exception as e:
         logger.error(f"Gemini init failed: {e}")
+        client = None
 
 # =====================================================
 # AUTH HELPER
@@ -98,8 +96,7 @@ def gemini_analyze(text):
     if not client:
         raise RuntimeError("Gemini client not available")
 
-    prompt = f"""
-You are CareCloud Safety Guardian AI.
+    prompt = f"""You are CareCloud Safety Guardian AI.
 The reader is ALWAYS a child or teenager.
 
 Rules:
@@ -131,8 +128,7 @@ Return STRICT JSON ONLY:
 }}
 
 Message:
-\"\"\"{text}\"\"\"
-"""
+\"\"\"{text}\"\"\""""
 
     try:
         response = client.models.generate_content(
@@ -141,14 +137,14 @@ Message:
         )
         if not response or not response.text:
             raise ValueError("Empty response from Gemini")
-            
+
         raw = response.text
         start = raw.find("{")
         end = raw.rfind("}") + 1
-        
+
         if start == -1 or end <= start:
             raise ValueError("No valid JSON found in response")
-            
+
         return json.loads(raw[start:end])
     except Exception as e:
         logger.error(f"Gemini processing error: {e}")
@@ -282,7 +278,7 @@ def analyze():
     )
 
     detected = gemini_data.get("detected_labels", {})
-    
+
     # Enforce risk score requirements
     if detected.get("sexual_content"):
         final_score = max(final_score, 70)
@@ -319,4 +315,4 @@ def analyze():
 # RUN
 # =====================================================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)
+    app.run(host="0.0.0.0", port=PORT, debug=False)
