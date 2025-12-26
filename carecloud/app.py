@@ -9,14 +9,21 @@ from flask import (
     Flask, render_template, request,
     jsonify, session, redirect, url_for
 )
+from PIL import Image
+import io
 
-import google.generativeai as genai
+from google import genai
+import logging
 
 # =====================================================
 # APP SETUP
 # =====================================================
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "carecloud-dev-secret")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # =====================================================
 # ENV VARIABLES (DO NOT RENAME)
@@ -29,8 +36,12 @@ MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
 # =====================================================
 # GEMINI SETUP
 # =====================================================
-genai.configure(api_key=GEMINI_API_KEY)
-gemini = genai.GenerativeModel("gemini-pro")
+client = None
+if GEMINI_API_KEY:
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Gemini client: {e}")
 
 # =====================================================
 # AUTH HELPERS
@@ -76,7 +87,10 @@ def perspective_analyze(text):
 # =====================================================
 # GEMINI — INTENT + MANIPULATION SAFE PROMPT
 # =====================================================
-def gemini_analyze(text):
+def gemini_analyze(text, image=None):
+    if not client:
+        raise ValueError("Gemini client not initialized")
+
     prompt = f"""
 You are CareCloud Safety Guardian AI.
 
@@ -124,10 +138,18 @@ Message:
 \"\"\"{text}\"\"\"
 """
 
-    response = gemini.generate_content(prompt).text
-    start = response.find("{")
-    end = response.rfind("}") + 1
-    return json.loads(response[start:end])
+    contents = [prompt]
+    if image:
+        contents.append(image)
+
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=contents
+    )
+    response_text = response.text
+    start = response_text.find("{")
+    end = response_text.rfind("}") + 1
+    return json.loads(response_text[start:end])
 
 # =====================================================
 # LOCAL FALLBACK (NEVER FAILS)
@@ -246,20 +268,34 @@ def analyze():
         return jsonify({"error": "Unauthorized"}), 401
 
     text = request.form.get("text", "").strip()
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
+    image_file = request.files.get("image")
+
+    if not text and not image_file:
+        return jsonify({"error": "No text or image provided"}), 400
+
+    image = None
+    if image_file:
+        try:
+            image_bytes = image_file.read()
+            image = Image.open(io.BytesIO(image_bytes))
+        except Exception as e:
+            logger.error(f"Image processing failed: {e}")
 
     try:
-        perspective = perspective_analyze(text)
+        if text:
+            perspective = perspective_analyze(text)
+        else:
+            perspective = {}
     except Exception:
         perspective = {}
 
     try:
-        gemini_data = gemini_analyze(text)
-    except Exception:
-        gemini_data = local_fallback(text)
 
-    final_score = max(
+    gemini_data = gemini_analyze(text)
+
+except Exception:
+
+    gemini_data = local_fallback(text)
         perspective.get("toxicity", 0),
         gemini_data.get("risk_score", 0)
     )
