@@ -21,10 +21,7 @@ from google import genai
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "carecloud-dev-secret")
 
-PORT = os.environ.get("PORT", 8080)
-if not PORT:
-    PORT = 8080
-PORT = int(PORT)
+PORT = int(os.environ.get("PORT", 5000))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("carecloud")
