@@ -4,11 +4,10 @@ import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
 
 from flask import (
     Flask, render_template, request,
-    jsonify, session, redirect, url_for, flash
+    jsonify, session, redirect, url_for
 )
 from PIL import Image
 import io
@@ -27,15 +26,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # =====================================================
-# ENV VARIABLES
+# ENV VARIABLES (DO NOT RENAME)
 # =====================================================
 PERSPECTIVE_API_KEY = os.environ.get("PERSPECTIVE_API_KEY")
 GEMINI_API_KEY = os.environ.get("AI_INTEGRATIONS_GEMINI")
-
 MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
 MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
-
-PORT = int(os.environ.get("PORT", 5000))
 
 # =====================================================
 # GEMINI SETUP
@@ -48,271 +44,77 @@ if GEMINI_API_KEY:
         logger.error(f"Failed to initialize Gemini client: {e}")
 
 # =====================================================
-# HELPERS
+# AUTH HELPERS
 # =====================================================
 def logged_in():
     return "user" in session
-
-
-def local_analyze(text):
-    text = text.lower()
-
-    # Strictly the 7 labels requested
-    labels = {
-        "sexual_content": False,
-        "grooming": False,
-        "harassment": False,
-        "manipulation": False,
-        "emotional_abuse": False,
-        "violence": False,
-        "self_harm_risk": False
-    }
-
-    score = 10
-    severity = "Low"
-    explanation = "This content appears safe."
-    support = "Everything looks okay. Stay safe!"
-    steps = ["Continue being positive online."]
-    guidance = "No action needed."
-
-    # Logic mappings
-    if any(w in text for w in ["die", "kill myself", "suicide", "end it"]):
-        labels["self_harm_risk"] = True
-        labels["emotional_abuse"] = True # Self-harm often correlates with emotional distress
-        score = 95
-        severity = "Critical"
-        explanation = "This message indicates a risk of self-harm."
-        support = "You are precious. Please call a helpline or talk to an adult immediately."
-        steps = ["Call 988 or a local helpline", "Talk to a parent now", "Do not be alone"]
-        guidance = "Immediate intervention required. Support the child."
-
-    elif any(w in text for w in ["kill you", "punch", "hurt", "beat", "gun", "knife", "die"]):
-        labels["violence"] = True
-        labels["harassment"] = True
-        score = 90
-        severity = "Critical"
-        explanation = "This message contains threats of violence."
-        support = "This is not okay. You have the right to be safe."
-        steps = ["Block the user", "Report to platform", "Tell an adult"]
-        guidance = "Assess safety. Report threats to authorities if serious."
-
-    elif any(w in text for w in ["hate", "ugly", "stupid", "idiot", "fat", "loser"]):
-        labels["harassment"] = True
-        labels["emotional_abuse"] = True
-        score = 75
-        severity = "High"
-        explanation = "This message contains insults and harassment."
-        support = "Their words reflect them, not you. You are worthy."
-        steps = ["Ignore the message", "Block the sender", "Talk to a friend"]
-        guidance = "Discuss how to handle bullies. Reassure the child."
-
-    elif any(w in text for w in ["sex", "nude", "send pic"]):
-        labels["sexual_content"] = True
-        labels["grooming"] = True # Strict rule: assume grooming risk in messages
-        score = 85
-        severity = "High"
-        explanation = "This message contains inappropriate sexual content."
-        support = "This is not appropriate. You don't have to respond."
-        steps = ["Block immediately", "Do not share photos", "Tell an adult"]
-        guidance = "Check for grooming signs. Report user."
-
-    # Consistency Check (Risk Score Rules)
-    if labels["sexual_content"] and score < 70:
-        score = 70
-        severity = "High"
-    if labels["grooming"] and score < 80:
-        score = 80
-        severity = "Critical" # 80 is High/Critical border, prompt says 70-89 High, 90-100 Critical. 80 is High.
-        if score >= 90: severity = "Critical"
-        else: severity = "High"
-
-    return {
-        "risk_score": score,
-        "severity_level": severity,
-        "detected_labels": labels,
-        "why_harmful": explanation,
-        "victim_support_message": support,
-        "safe_response_steps": steps,
-        "parent_guidance": guidance
-    }
-
-
-# =====================================================
-# AUTH ROUTES
-# =====================================================
-@app.route("/", methods=["GET"])
-def home():
-    return redirect(url_for("login"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        email = request.form.get("email")
-        password = request.form.get("password")
-
-        # Simple demo auth (no DB yet)
-        session["user"] = {
-            "name": email.split("@")[0].title(),
-            "email": email,
-            "parent_email": session.get("parent_email")
-        }
-
-        return redirect(url_for("dashboard"))
-
-    return render_template("login.html", mode="login")
-
-
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    if request.method == "POST":
-        session["user"] = {
-            "name": request.form.get("name"),
-            "email": request.form.get("email"),
-            "parent_email": request.form.get("parent_email")
-        }
-        return redirect(url_for("dashboard"))
-
-    return render_template("login.html", mode="signup")
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
-
-# =====================================================
-# DASHBOARD
-# =====================================================
-@app.route("/dashboard")
-def dashboard():
-    if not logged_in():
-        return redirect(url_for("login"))
-
-    return render_template(
-        "dashboard.html",
-        user=session["user"],
-        history=[]
-    )
-
 
 # =====================================================
 # PERSPECTIVE API
 # =====================================================
 def perspective_analyze(text):
-    url = "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze"
-    payload = {
-        "comment": {"text": text},
-        "languages": ["en"],
-        "requestedAttributes": {
-            "TOXICITY": {},
-            "SEVERE_TOXICITY": {},
-            "INSULT": {},
-            "THREAT": {},
-            "IDENTITY_ATTACK": {},
-            "SEXUALLY_EXPLICIT": {}
-        }
-    }
+    if not PERSPECTIVE_API_KEY:
+        return {}
 
-    r = requests.post(
-        f"{url}?key={PERSPECTIVE_API_KEY}",
-        json=payload,
-        timeout=8
-    )
+    try:
+        r = requests.post(
+            "https://commentanalyzer.googleapis.com/v1alpha1/comments:analyze",
+            params={"key": PERSPECTIVE_API_KEY},
+            json={
+                "comment": {"text": text},
+                "languages": ["en"],
+                "requestedAttributes": {
+                    "TOXICITY": {},
+                    "SEVERE_TOXICITY": {},
+                    "INSULT": {},
+                    "THREAT": {},
+                    "IDENTITY_ATTACK": {},
+                    "SEXUALLY_EXPLICIT": {}
+                }
+            },
+            timeout=8
+        )
+        data = r.json()
+    except Exception:
+        return {}
 
-    data = r.json()
     scores = {}
-
     for k, v in data.get("attributeScores", {}).items():
         scores[k.lower()] = int(v["summaryScore"]["value"] * 100)
 
     return scores
 
-
 # =====================================================
-# GEMINI ANALYSIS (HEAVILY FINE-TUNED)
+# GEMINI — INTENT + MANIPULATION SAFE PROMPT
 # =====================================================
 def gemini_analyze(text, image=None):
     if not client:
         raise ValueError("Gemini client not initialized")
 
     prompt = f"""
-You are CareCloud Safety AI.
+You are CareCloud Safety Guardian AI.
 
-Your job is to protect children and teenagers from harmful online messages.
+The reader is ALWAYS a child or teenager.
 
-This system is SAFETY-FIRST.
-False negatives are NOT acceptable.
+Analyze:
+- Explicit meaning
+- Hidden intent
+- Grooming patterns
+- Manipulation or boundary testing
+- Sexual invitations even if polite
 
---------------------------------------------------
-CRITICAL CONSISTENCY RULE (VERY IMPORTANT)
---------------------------------------------------
-Your outputs MUST be logically consistent.
+ABSOLUTE RULES:
+- Sexual content is NEVER safe for minors
+- Sexual invitations = HIGH RISK
+- Flattery + sexual intent = grooming
+- If sexual_content → risk_score ≥ 70
+- If grooming → risk_score ≥ 80
+- NEVER say "safe" if harm exists
 
-If risk_score >= 40:
-- You MUST detect at least one harmful label
-- You MUST explain why the content is harmful
-- You MUST NOT say “safe” or “no risks detected”
-
-If risk_score >= 70:
-- sexual_content, harassment, grooming, or emotional_abuse
-  MUST be evaluated VERY STRICTLY
-
-If content contains:
-- sexual acts
-- explicit body parts
-- invitations involving sex
-THEN:
-- sexual_content = true
-- grooming = true IF the target could be a minor
-
---------------------------------------------------
-ABSOLUTE RULES (DO NOT BREAK)
---------------------------------------------------
-- Sexual language is NEVER safe for children
-- Invitations to sexual acts = HIGH RISK
-- Flirtation + explicit language = grooming risk
-- “Cute + sexual act” = manipulation + sexual content
-- Never downplay sexual harm
-
---------------------------------------------------
-LABEL DEFINITIONS (MANDATORY)
---------------------------------------------------
-sexual_content:
-  Any explicit sexual language, body parts, or sexual acts
-
-grooming:
-  Flattery + sexual intent, invitations, or normalization of sexual behavior
-
-harassment:
-  Unwanted sexual advances or objectifying language
-
-manipulation:
-  Emotional pressure or normalization of inappropriate behavior
-
---------------------------------------------------
-SCORING RULES (STRICT)
---------------------------------------------------
-If sexual_content = true → minimum risk_score = 70
-If grooming = true → minimum risk_score = 80
-
---------------------------------------------------
-WHAT TO TELL THE CHILD
---------------------------------------------------
-- Use calm, supportive language
-- NEVER say “this is safe” if sexual content exists
-- Always reassure the child they did nothing wrong
-
---------------------------------------------------
-OUTPUT FORMAT (STRICT JSON ONLY)
---------------------------------------------------
 Return ONLY valid JSON:
 
 {{
   "risk_score": number,
-  "severity_level": "Low | Medium | High | Critical",
-
   "detected_labels": {{
     "sexual_content": true/false,
     "grooming": true/false,
@@ -322,29 +124,17 @@ Return ONLY valid JSON:
     "violence": true/false,
     "self_harm_risk": true/false
   }},
-
-  "why_harmful": "Clear explanation of why this content is unsafe for a child",
-
-  "victim_support_message": "Kind, reassuring message",
-
+  "why_harmful": "Explain why this is unsafe for a child",
+  "victim_support_message": "Reassuring message",
   "safe_response_steps": [
-    "Block or mute the sender",
     "Do not reply",
+    "Block or mute the sender",
     "Tell a trusted adult"
   ],
-
-  "parent_guidance": "Supportive advice, not punishment"
+  "parent_guidance": "Supportive advice"
 }}
 
---------------------------------------------------
-FINAL CHECK (SELF-VERIFY)
---------------------------------------------------
-Before responding, verify:
-- Do labels match the risk_score?
-- Does explanation match detected labels?
-- Is sexual content ever marked safe? (If yes → FIX IT)
-
-Message to analyze:
+Message:
 \"\"\"{text}\"\"\"
 """
 
@@ -361,30 +151,65 @@ Message to analyze:
     end = response_text.rfind("}") + 1
     return json.loads(response_text[start:end])
 
+# =====================================================
+# LOCAL FALLBACK (NEVER FAILS)
+# =====================================================
+def local_fallback(text):
+    t = text.lower()
+
+    labels = {
+        "sexual_content": False,
+        "grooming": False,
+        "harassment": False,
+        "manipulation": False,
+        "emotional_abuse": False,
+        "violence": False,
+        "self_harm_risk": False
+    }
+
+    score = 10
+
+    sexual_terms = [
+        "penis", "sex", "come sit", "touch me",
+        "nude", "kiss", "send pic", "bed"
+    ]
+
+    if any(w in t for w in sexual_terms):
+        labels.update({
+            "sexual_content": True,
+            "grooming": True,
+            "harassment": True,
+            "manipulation": True
+        })
+        score = 85
+
+    return {
+        "risk_score": score,
+        "detected_labels": labels,
+        "why_harmful": "This message contains inappropriate sexual content for a minor.",
+        "victim_support_message": "You did nothing wrong. This behavior is not okay.",
+        "safe_response_steps": [
+            "Do not reply",
+            "Block the sender",
+            "Tell a trusted adult"
+        ],
+        "parent_guidance": "Provide calm reassurance and support."
+    }
 
 # =====================================================
 # EMAIL ALERT
 # =====================================================
 def send_parent_alert(text, score, parent_email):
-    if not parent_email or not MAIL_USERNAME or not MAIL_PASSWORD:
+    if not (parent_email and MAIL_USERNAME and MAIL_PASSWORD):
         return
 
     msg = MIMEMultipart()
     msg["From"] = MAIL_USERNAME
     msg["To"] = parent_email
-    msg["Subject"] = "⚠ CareCloud Alert: High Risk Content"
+    msg["Subject"] = "⚠ CareCloud Safety Alert"
 
     msg.attach(MIMEText(
-        f"""
-High-risk content detected.
-
-Message:
-{text}
-
-Risk Score: {score}%
-
-Please provide emotional support.
-""",
+        f"High-risk content detected.\n\nMessage:\n{text}\n\nRisk Score: {score}%",
         "plain"
     ))
 
@@ -393,9 +218,49 @@ Please provide emotional support.
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
         server.send_message(msg)
 
+# =====================================================
+# ROUTES
+# =====================================================
+@app.route("/")
+def home():
+    return redirect(url_for("login"))
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "")
+        session["user"] = {
+            "name": email.split("@")[0].title(),
+            "email": email,
+            "parent_email": session.get("parent_email")
+        }
+        return redirect(url_for("dashboard"))
+    return render_template("login.html", mode="login")
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+        session["user"] = {
+            "name": request.form.get("name"),
+            "email": request.form.get("email"),
+            "parent_email": request.form.get("parent_email")
+        }
+        return redirect(url_for("dashboard"))
+    return render_template("login.html", mode="signup")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+@app.route("/dashboard")
+def dashboard():
+    if not logged_in():
+        return redirect(url_for("login"))
+    return render_template("dashboard.html", user=session["user"], history=[])
 
 # =====================================================
-# ANALYZE ENDPOINT (NEVER HANGS)
+# ANALYZE ENDPOINT (CONSISTENT)
 # =====================================================
 @app.route("/analyze", methods=["POST"])
 def analyze():
@@ -425,34 +290,23 @@ def analyze():
         perspective = {}
 
     try:
-        gemini_data = gemini_analyze(text, image)
-    except Exception as e:
-        logger.error(f"Gemini Analysis Failed: {e}")
-        gemini_data = local_analyze(text)
 
-    final_score = max(
+    gemini_data = gemini_analyze(text)
+
+except Exception:
+
+    gemini_data = local_fallback(text)
         perspective.get("toxicity", 0),
         gemini_data.get("risk_score", 0)
     )
 
-    # ---------------------------------------------------------
-    # CRITICAL SAFETY CONSISTENCY CHECK
-    # ---------------------------------------------------------
-    detected = gemini_data.get("detected_labels", {})
-    any_harmful = any(detected.values())
+    detected = gemini_data["detected_labels"]
 
-    # 1. High Score MUST have a label
-    if final_score >= 40 and not any_harmful:
-        detected["harassment"] = True  # Fallback for unexplained high risk
-        gemini_data["why_harmful"] = "Content flagged as high risk by safety filters."
+    if detected.get("sexual_content"):
+        final_score = max(final_score, 70)
+    if detected.get("grooming"):
+        final_score = max(final_score, 80)
 
-    # 2. Severe Labels MUST have High Score
-    severe_labels = ["sexual_content", "grooming", "violence", "self_harm_risk"]
-    if any(detected.get(l) for l in severe_labels):
-        if final_score < 70:
-            final_score = 70
-
-    # 3. Strict Severity Recalculation
     if final_score >= 90:
         severity = "Critical"
     elif final_score >= 70:
@@ -461,13 +315,6 @@ def analyze():
         severity = "Medium"
     else:
         severity = "Low"
-
-    # 4. Explanation Consistency
-    if final_score >= 40 and "safe" in gemini_data.get("why_harmful", "").lower():
-        gemini_data["why_harmful"] = "Potential harm detected based on analysis scores."
-
-    gemini_data["detected_labels"] = detected
-    # ---------------------------------------------------------
 
     if final_score >= 80:
         send_parent_alert(
@@ -479,22 +326,9 @@ def analyze():
     return jsonify({
         "toxicity_score": final_score,
         "severity_level": severity,
-        "detected_labels": gemini_data["detected_labels"],
+        "detected_labels": detected,
         "explanation": gemini_data["why_harmful"],
-        "victim_support_message": gemini_data.get("victim_support_message", gemini_data.get("victim_support")),
-        "safe_response_steps": gemini_data.get("safe_response_steps", gemini_data.get("safety_steps", [])),
-        "parent_alert_required": final_score >= 80,
-        "support_panel_content": {
-            "context_summary": gemini_data["why_harmful"],
-            "student_guidance": gemini_data.get("victim_support_message", gemini_data.get("victim_support")),
-            "parent_guidance": gemini_data["parent_guidance"],
-            "next_steps": gemini_data.get("safe_response_steps", gemini_data.get("safety_steps", []))
-        }
+        "victim_support_message": gemini_data["victim_support_message"],
+        "safe_response_steps": gemini_data["safe_response_steps"],
+        "parent_alert_required": final_score >= 80
     })
-
-
-# =====================================================
-# RUN
-# =====================================================
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)

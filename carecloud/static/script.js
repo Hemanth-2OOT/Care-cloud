@@ -1,11 +1,14 @@
 // ==============================
+// GLOBAL STATE
+// ==============================
+let analysisHistory = [];
+
+// ==============================
 // INIT
 // ==============================
 document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("analyzeForm");
-    if (form) {
-        form.addEventListener("submit", handleAnalyze);
-    }
+    if (form) form.addEventListener("submit", handleAnalyze);
     showIdleState();
 });
 
@@ -15,10 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
 async function handleAnalyze(e) {
     e.preventDefault();
 
-    const text = document.getElementById("text_content")?.value || "";
+    const text = document.getElementById("text_content")?.value.trim() || "";
     const image = document.getElementById("image_file")?.files[0];
 
-    if (!text.trim() && !image) {
+    if (!text && !image) {
         alert("Please enter text or upload an image.");
         return;
     }
@@ -30,14 +33,10 @@ async function handleAnalyze(e) {
         fd.append("text", text);
         if (image) fd.append("image", image);
 
-        const res = await fetch("/analyze", {
-            method: "POST",
-            body: fd
-        });
-
+        const res = await fetch("/analyze", { method: "POST", body: fd });
         const data = await res.json();
-        updateUI(data);
 
+        updateUI(data);
     } catch (err) {
         console.error(err);
         alert("Analysis failed. Please try again.");
@@ -77,34 +76,44 @@ function toggle(id, show) {
 }
 
 // ==============================
-// MAIN UI UPDATE
+// MAIN UI UPDATE (STRICT SAFETY)
 // ==============================
-function updateUI(data) {
+function updateUI(data = {}) {
     const score = Number(data.toxicity_score || 0);
-    const severity = data.severity_level || "Low";
+    const labels = data.detected_labels || {};
+
+    // 🔒 HARD SAFETY LOGIC (UI NEVER LIES)
+    const hasHarm = Object.values(labels).some(Boolean);
+    const isRisk = score >= 40 || hasHarm;
+
+    let severity;
+    if (score >= 90) severity = "Critical";
+    else if (score >= 70) severity = "High";
+    else if (score >= 40) severity = "Medium";
+    else severity = "Low";
 
     updateGauge(score);
     updateRiskBar(score);
 
-    document.getElementById("riskScore").textContent = `${score}%`;
-    document.getElementById("riskStatus").textContent = severity;
+    setText("riskScore", `${score}%`);
+    setText("riskStatus", severity);
 
-    document.getElementById("explanationText").textContent =
-        data.explanation || "This content may be harmful.";
+    setText(
+        "explanationText",
+        data.explanation || "Potentially unsafe content detected."
+    );
 
-    renderLabels(data.detected_labels || {}, score);
+    renderLabels(labels, score);
     renderVictimSupport(data.victim_support_message);
     renderSafeSteps(data.safe_response_steps || []);
 
     toggle("alertInfo", !!data.parent_alert_required);
+
     toggle("analyzingState", false);
     toggle("resultsEmpty", false);
     toggle("resultsContent", true);
 
-    // Strict UI State Logic
-    const hasLabels = Object.values(data.detected_labels || {}).some(val => val === true);
-    const isRisk = score >= 40 || hasLabels;
-
+    // 🔴 SAFE vs RISK STATE (FINAL AUTHORITY)
     if (isRisk) {
         toggle("riskState", true);
         toggle("safeState", false);
@@ -114,7 +123,7 @@ function updateUI(data) {
     }
 
     disableAnalyze(false);
-    addToHistory(data);
+    addToHistory({ score, severity, labels });
 }
 
 // ==============================
@@ -123,8 +132,8 @@ function updateUI(data) {
 function updateGauge(score) {
     const needle = document.getElementById("gaugeNeedle");
     if (!needle) return;
-    const rotation = score * 1.8 - 90;
-    needle.style.transform = `translateX(-50%) rotate(${rotation}deg)`;
+    needle.style.transform =
+        `translateX(-50%) rotate(${score * 1.8 - 90}deg)`;
 }
 
 function updateRiskBar(score) {
@@ -139,7 +148,7 @@ function updateRiskBar(score) {
 }
 
 // ==============================
-// LABELS (GEMINI-BASED)
+// LABELS (INTENT-AWARE)
 // ==============================
 function renderLabels(labels, score) {
     const container = document.getElementById("labelsContainer");
@@ -157,23 +166,21 @@ function renderLabels(labels, score) {
         self_harm_risk: "Self-Harm Risk"
     };
 
-    let found = false;
+    let shown = false;
 
     Object.entries(LABEL_MAP).forEach(([key, label]) => {
         if (labels[key]) {
-            found = true;
+            shown = true;
             container.innerHTML +=
                 `<span class="label-minimal detected">⚠ ${label}</span>`;
         }
     });
 
-    if (!found) {
-        if (score >= 40) {
-            // Safety Consistency: High score but no specific labels
-            container.innerHTML = `<span class="label-minimal detected">⚠ Unsafe content detected</span>`;
-        } else {
-            container.innerHTML = `<span class="label-minimal safe">✓ No major risks detected</span>`;
-        }
+    if (!shown) {
+        container.innerHTML =
+            score >= 40
+                ? `<span class="label-minimal detected">⚠ Unsafe content detected</span>`
+                : `<span class="label-minimal safe">✓ No major risks detected</span>`;
     }
 }
 
@@ -183,10 +190,10 @@ function renderLabels(labels, score) {
 function renderVictimSupport(text) {
     const section = document.getElementById("victimSupportSection");
     const el = document.getElementById("victimSupportText");
-
     if (!section || !el) return;
 
-    el.textContent = text || "You are not alone. Please talk to someone you trust.";
+    el.textContent =
+        text || "You are not alone. Please talk to someone you trust.";
     section.style.display = "block";
 }
 
@@ -200,12 +207,11 @@ function renderSafeSteps(steps) {
 }
 
 // ==============================
-// HISTORY & MODAL
+// HISTORY (SANITIZED)
 // ==============================
-let analysisHistory = [];
-
-function addToHistory(data) {
-    analysisHistory.unshift(data);
+function addToHistory(entry) {
+    analysisHistory.unshift(entry);
+    if (analysisHistory.length > 5) analysisHistory.pop();
     renderHistory();
 }
 
@@ -223,32 +229,25 @@ function renderHistory() {
 
     if (emptyMsg) emptyMsg.style.display = "none";
 
-    analysisHistory.forEach((item, index) => {
+    analysisHistory.forEach(item => {
         const li = document.createElement("li");
         li.className = "history-item";
-
-        // Format detected labels
-        const LABEL_MAP = {
-            sexual_content: "Sexual Content",
-            grooming: "Grooming",
-            harassment: "Harassment",
-            manipulation: "Manipulation",
-            emotional_abuse: "Emotional Abuse",
-            violence: "Violence",
-            self_harm_risk: "Self-Harm Risk"
-        };
-
-        const labels = Object.entries(item.detected_labels || {})
-            .filter(([key, val]) => val && LABEL_MAP[key])
-            .map(([key, _]) => LABEL_MAP[key])
-            .join(", ") || "Safe";
-
         li.innerHTML = `
             <div class="history-info">
-                <span class="history-severity ${item.severity_level}">${item.severity_level} Risk</span>
-                <span class="history-labels">${labels}</span>
+                <span class="history-severity">${item.severity} Risk</span>
+                <span class="history-labels">
+                    ${Object.keys(item.labels).filter(k => item.labels[k]).join(", ") || "Safe"}
+                </span>
             </div>
         `;
         list.appendChild(li);
     });
+}
+
+// ==============================
+// UTILS
+// ==============================
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
 }
