@@ -96,54 +96,61 @@ def gemini_analyze(text):
     if not client:
         raise RuntimeError("Gemini client not available")
 
-    prompt = f"""You are CareCloud Safety AI. Analyze ONLY this message as if sent to a minor.
+    prompt = f"""You are CareCloud Safety AI. Protect children and teenagers from harmful messages.
+Assume the reader is always a vulnerable minor.
 
-Your output MUST be fully CONTEXT-AWARE. Do NOT use generic text.
-- Explain WHY it is harmful (specific words, tone, intent)
-- Generate support that matches THIS situation
-- Generate instructions tailored to THIS risk level
-- NEVER repeat same instructions for every message
-- NEVER say "This is not okay" without explaining why
+CORE PRINCIPLES (STRICT):
+• Analyze INTENT, not just words
+• Casual, joking, or slang language can still be harmful
+• Never downplay harm
+• False negatives are NOT acceptable
 
-CRITICAL: Assume recipient is a minor. Detect grooming, manipulation, hidden sexual intent.
+LABEL DEFINITIONS (EXPANDED):
+- harassment: Insults, humiliation, degrading language
+- violence: Any encouragement/threat of physical harm (hit, slap, beat, kill)
+- emotional_abuse: Shaming, intimidation, guilt, psychological harm
+- sexual_content: Sexual language, body parts, or sexual acts
+- grooming: Flattery, trust-building, or normalization with sexual intent
+- manipulation: Pressure, coercion, secrecy, emotional steering
+- hate_speech: Attacks on identity, family, race, gender, religion
+- threats: Direct or implied threats of harm
+- coercion: Forcing or pushing someone toward an action
+- self_harm_risk: Encouraging or expressing self-harm
 
-LABEL DEFINITIONS:
-- sexual_content: explicit language, body parts, invitations, sexualized compliments
-- grooming: flattery + sexual intent, normalization, secrecy requests
-- manipulation: "You're special", emotional steering, making child feel responsible
-- harassment: unwanted sexual attention, objectifying language
-- emotional_abuse: shaming, guilt-tripping, fear, control
-- violence: threats, intimidation, harm
-- self_harm_risk: encouraging self-harm or suicide
-
-RULES:
-• sexual_content = true → risk_score ≥ 70
-• grooming = true → risk_score ≥ 80
+SCORING RULES (MANDATORY):
+• violence/threats → risk_score ≥ 50
+• harassment or emotional_abuse → risk_score ≥ 40
+• sexual_content → risk_score ≥ 70
+• grooming or coercion → risk_score ≥ 80
 • If ANY label true → NOT SAFE
-• Friendly tone ≠ safe. Compliments + sexual = HIGH RISK
 
-Return STRICT JSON ONLY (no extra text):
+ABSOLUTE UI SAFETY RULES:
+• "Safe" is allowed ONLY when: risk_score < 30 AND all labels false
+• If risk_score ≥ 40 → explanation MUST mention harm
+• Labels, score, explanation, instructions MUST agree
+
+Return STRICT JSON ONLY:
 {{
   "risk_score": number,
   "severity_level": "Low | Medium | High | Critical",
   "detected_labels": {{
+    "harassment": boolean,
+    "violence": boolean,
+    "emotional_abuse": boolean,
     "sexual_content": boolean,
     "grooming": boolean,
-    "harassment": boolean,
     "manipulation": boolean,
-    "emotional_abuse": boolean,
-    "violence": boolean,
+    "hate_speech": boolean,
+    "threats": boolean,
+    "coercion": boolean,
     "self_harm_risk": boolean
   }},
-  "context_summary": "2-3 lines: what this message does, why unsafe",
-  "intent_detected": "Hidden/implied intent in simple language",
-  "support_for_user": "Empathetic message tailored to THIS exact situation",
-  "why_harmful": "Explanation for teenager (specific to message)",
-  "victim_support_message": "Calming reassurance (never blame)",
-  "safe_response_steps": [
-    "Specific action 1 for THIS message",
-    "Specific action 2 for THIS message",
-    "Specific action 3 for THIS message"
+  "context_summary": "Explain clearly why THIS message is harmful or concerning",
+  "support_for_user": "Supportive, calm message tailored to this situation",
+  "instructions": [
+    "Action 1 appropriate to this risk",
+    "Action 2 appropriate to this risk",
+    "Action 3 if needed"
   ]
 }}
 
@@ -176,12 +183,15 @@ Message: "{text}"
 def local_fallback(text):
     t = text.lower()
     labels = {
+        "harassment": False,
+        "violence": False,
+        "emotional_abuse": False,
         "sexual_content": False,
         "grooming": False,
-        "harassment": False,
         "manipulation": False,
-        "emotional_abuse": False,
-        "violence": False,
+        "hate_speech": False,
+        "threats": False,
+        "coercion": False,
         "self_harm_risk": False
     }
     score = 10
@@ -189,11 +199,23 @@ def local_fallback(text):
     
     sexual_terms = ["penis", "sex", "come sit", "touch me", "nude", "kiss", "send pic", "bed", "pic", "nudes"]
     grooming_terms = ["special", "only you", "don't tell", "our secret", "nobody needs to know", "you're mature"]
-    threat_terms = ["kill", "hurt", "punch", "stab", "die", "death"]
+    threat_terms = ["kill", "hurt", "punch", "stab", "die", "death", "harm", "attack"]
+    insult_terms = ["stupid", "dumb", "idiot", "loser", "worthless", "ugly", "fat"]
+    coercion_terms = ["you have to", "you must", "you need to", "i'll tell everyone", "everyone will know", "you owe me"]
+    hate_terms = ["hate all", "stupid", "inferior", "trash", "dirty"]
     
     has_sexual = any(w in t for w in sexual_terms)
     has_grooming = any(w in t for w in grooming_terms)
     has_threat = any(w in t for w in threat_terms)
+    has_insult = any(w in t for w in insult_terms)
+    has_coercion = any(w in t for w in coercion_terms)
+    has_hate = any(w in t for w in hate_terms)
+    has_self_harm = any(w in t for w in ["kill myself", "hurt myself", "die", "suicide"])
+    
+    if has_threat:
+        labels["threats"] = True
+        labels["violence"] = True
+        score = max(score, 50)
     
     if has_sexual:
         labels["sexual_content"] = True
@@ -202,18 +224,29 @@ def local_fallback(text):
     if has_sexual and has_grooming:
         labels["grooming"] = True
         labels["manipulation"] = True
+        labels["harassment"] = True
         score = max(score, 85)
     elif has_grooming:
         labels["grooming"] = True
         labels["manipulation"] = True
         score = max(score, 80)
     
-    if has_sexual or has_grooming:
+    if has_insult:
         labels["harassment"] = True
+        score = max(score, 40)
     
-    if has_threat:
-        labels["violence"] = True
-        score = max(score, 75)
+    if has_coercion:
+        labels["coercion"] = True
+        labels["manipulation"] = True
+        score = max(score, 80)
+    
+    if has_hate:
+        labels["hate_speech"] = True
+        score = max(score, 50)
+    
+    if has_self_harm:
+        labels["self_harm_risk"] = True
+        score = max(score, 70)
     
     if score >= 90:
         severity = "Critical"
@@ -223,66 +256,49 @@ def local_fallback(text):
         severity = "Medium"
     
     context_summary = ""
-    intent = ""
     support = ""
-    steps = []
+    instructions = []
     
     if has_sexual and has_grooming:
         context_summary = "This message uses flattery mixed with sexual language. It's a common grooming tactic where someone tries to make you feel special while also testing your boundaries."
-        intent = "The sender is attempting to normalize sexual conversation while building your trust, gradually escalating the relationship toward sexual content."
         support = "You are not overreacting. Adults who mix compliments with sexual interest are trying to manipulate you. You deserve adults who respect your safety."
-        steps = [
-            "Screenshot this message (don't delete it)",
-            "Block this person immediately on all platforms",
-            "Show a trusted adult or school counselor right now"
-        ]
-    elif has_grooming:
-        context_summary = "This message uses special attention and flattery to make you feel unique and understood. This is a grooming pattern designed to isolate you."
-        intent = "The sender wants you to feel like they 'get you' in a way others don't, making you less likely to tell adults about the relationship."
-        support = "Real caring adults in your life already support you. Suspicious online attention is a warning sign, not a compliment."
-        steps = [
-            "Remember: They don't actually know you",
-            "Stop responding to this person",
-            "Tell a parent, school counselor, or call NCMEC (1-800-843-5678)"
-        ]
-    elif has_sexual:
-        context_summary = "This message contains explicit sexual language directed at a minor. This is predatory behavior."
-        intent = "The sender is testing if you'll engage with sexual content, or trying to shock/manipulate you into responding."
-        support = "You didn't do anything to cause this. Sexual messages from adults to minors are always wrong."
-        steps = [
-            "Do not respond or engage",
-            "Block and report on this platform",
-            "Tell a trusted adult immediately"
-        ]
+        instructions = ["Screenshot this message (don't delete it)", "Block this person immediately on all platforms", "Show a trusted adult or school counselor right now"]
+    elif has_coercion:
+        context_summary = "This message uses pressure or threats to force you to do something. This is coercion and is a form of control."
+        support = "You have the right to say no. Nobody can force you into something you don't want to do. Tell a trusted adult about this pressure."
+        instructions = ["Don't give in to the pressure", "Tell a trusted adult immediately", "Block this person if you feel unsafe"]
     elif has_threat:
         context_summary = "This message contains threats or language meant to frighten or harm you."
-        intent = "The sender is trying to control or intimidate you through fear."
         support = "Threats are serious. Your safety matters, and you don't deserve to be treated this way."
-        steps = [
-            "Take threats seriously (even if they seem joking)",
-            "Save evidence and report to platform",
-            "Tell a school official or parent immediately"
-        ]
+        instructions = ["Take threats seriously (even if they seem joking)", "Save evidence and report to platform", "Tell a school official or parent immediately"]
+    elif has_sexual:
+        context_summary = "This message contains explicit sexual language directed at a minor. This is predatory behavior."
+        support = "You didn't do anything to cause this. Sexual messages from adults to minors are always wrong."
+        instructions = ["Do not respond or engage", "Block and report on this platform", "Tell a trusted adult immediately"]
+    elif has_grooming:
+        context_summary = "This message uses special attention and flattery to make you feel unique. This is a grooming pattern designed to isolate you."
+        support = "Real caring adults in your life already support you. Suspicious online attention is a warning sign, not a compliment."
+        instructions = ["Remember: They don't actually know you", "Stop responding to this person", "Tell a parent, school counselor, or call NCMEC (1-800-843-5678)"]
+    elif has_insult:
+        context_summary = "This message uses insulting or degrading language to hurt or humiliate you."
+        support = "Words designed to hurt can affect us, but you're not what they say. You have value."
+        instructions = ["Don't engage or respond to insults", "Block this person", "Talk to someone you trust about how this made you feel"]
+    elif has_self_harm:
+        context_summary = "This message expresses or encourages self-harm or suicide. This is a crisis situation."
+        support = "If you're having these thoughts, reach out for help immediately. You matter and your life has value."
+        instructions = ["Call the 988 Suicide & Crisis Lifeline immediately", "Text HOME to 741741", "Tell a trusted adult or go to an emergency room"]
     else:
-        context_summary = "This message has raised some concerns. Trust your gut if something feels off."
-        intent = "Possible concerning intent detected."
+        context_summary = "This message has raised some concerns."
         support = "Your instincts about uncomfortable messages are important."
-        steps = [
-            "Take a break from responding",
-            "Talk to someone you trust about how it made you feel",
-            "You can block or mute anytime"
-        ]
+        instructions = ["Take a break from responding", "Talk to someone you trust", "You can block or mute anytime"]
     
     return {
         "risk_score": score,
         "severity_level": severity,
         "detected_labels": labels,
         "context_summary": context_summary,
-        "intent_detected": intent,
         "support_for_user": support,
-        "why_harmful": context_summary,
-        "victim_support_message": support,
-        "safe_response_steps": steps
+        "instructions": instructions
     }
 
 # =====================================================
@@ -397,9 +413,9 @@ def analyze():
             session["user"].get("parent_email")
         )
 
-    explanation = gemini_data.get("why_harmful") or gemini_data.get("context_summary", "Analysis complete.")
-    support_msg = gemini_data.get("victim_support_message") or gemini_data.get("support_for_user", "Stay safe and talk to someone you trust.")
-    steps = gemini_data.get("safe_response_steps", ["Do not reply", "Block sender", "Tell an adult"])
+    explanation = gemini_data.get("context_summary", "Analysis complete.")
+    support_msg = gemini_data.get("support_for_user", "Stay safe and talk to someone you trust.")
+    steps = gemini_data.get("instructions", ["Do not reply", "Block sender", "Tell an adult"])
 
     return jsonify({
         "toxicity_score": final_score,
@@ -408,8 +424,6 @@ def analyze():
         "explanation": explanation,
         "victim_support_message": support_msg,
         "safe_response_steps": steps,
-        "context_summary": gemini_data.get("context_summary"),
-        "intent_detected": gemini_data.get("intent_detected"),
         "parent_alert_required": final_score >= 80
     })
 
