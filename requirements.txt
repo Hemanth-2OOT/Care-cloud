@@ -18,3 +18,4 @@ pytesseract
 python-dotenv
 requests
 werkzeug
+google-genai
