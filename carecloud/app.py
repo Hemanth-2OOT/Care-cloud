@@ -10,6 +10,8 @@ from flask import (
     Flask, render_template, request,
     jsonify, session, redirect, url_for, flash
 )
+from PIL import Image
+import io
 
 from google import genai
 import logging
@@ -231,7 +233,7 @@ def perspective_analyze(text):
 # =====================================================
 # GEMINI ANALYSIS (HEAVILY FINE-TUNED)
 # =====================================================
-def gemini_analyze(text):
+def gemini_analyze(text, image=None):
     if not client:
         raise ValueError("Gemini client not initialized")
 
@@ -346,9 +348,13 @@ Message to analyze:
 \"\"\"{text}\"\"\"
 """
 
+    contents = [prompt]
+    if image:
+        contents.append(image)
+
     response = client.models.generate_content(
         model="gemini-1.5-flash",
-        contents=prompt
+        contents=contents
     )
     response_text = response.text
     start = response_text.find("{")
@@ -397,16 +403,29 @@ def analyze():
         return jsonify({"error": "Unauthorized"}), 401
 
     text = request.form.get("text", "").strip()
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
+    image_file = request.files.get("image")
+
+    if not text and not image_file:
+        return jsonify({"error": "No text or image provided"}), 400
+
+    image = None
+    if image_file:
+        try:
+            image_bytes = image_file.read()
+            image = Image.open(io.BytesIO(image_bytes))
+        except Exception as e:
+            logger.error(f"Image processing failed: {e}")
 
     try:
-        perspective = perspective_analyze(text)
+        if text:
+            perspective = perspective_analyze(text)
+        else:
+            perspective = {}
     except Exception:
         perspective = {}
 
     try:
-        gemini_data = gemini_analyze(text)
+        gemini_data = gemini_analyze(text, image)
     except Exception as e:
         logger.error(f"Gemini Analysis Failed: {e}")
         gemini_data = local_analyze(text)
